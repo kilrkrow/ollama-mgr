@@ -910,4 +910,14 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// Optional deep-link for screenshots/docs: ?view=family|tag|popular
+(function initViewFromQuery() {
+  try {
+    var v = new URLSearchParams(location.search).get('view');
+    if (v === 'tag' || v === 'popular' || v === 'family') {
+      setTimeout(function() { setViewMode(v); }, 0);
+    }
+  } catch (e) { /* ignore */ }
+})();
+
 refresh();

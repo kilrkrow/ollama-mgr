@@ -34,6 +34,42 @@ var staticFS embed.FS
 
 // Run starts a local API server and opens a WebView2 window (falls back to browser).
 func Run(cfg config.Config) {
+	addr, stop := startServer(cfg, "127.0.0.1:0")
+	defer stop()
+
+	url := "http://" + addr + "/"
+	// Prefer native WebView2 window; fall back to default browser.
+	w := webview2.NewWithOptions(webview2.WebViewOptions{
+		Debug:     false,
+		AutoFocus: true,
+		WindowOptions: webview2.WindowOptions{
+			Title:  "ollama-mgr",
+			Width:  1100,
+			Height: 640,
+			Center: true,
+		},
+	})
+	if w == nil {
+		log.Printf("WebView2 unavailable; opening browser at %s", url)
+		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		// keep process alive serving HTTP
+		select {}
+	}
+	defer w.Destroy()
+	w.Navigate(url)
+	w.Run()
+}
+
+// RunHTTP serves the GUI over HTTP only (no WebView). Used for screenshots/dev.
+// addr example: "127.0.0.1:8765". Blocks until stop is impossible — call from main.
+func RunHTTP(cfg config.Config, addr string) {
+	listen, stop := startServer(cfg, addr)
+	defer stop()
+	log.Printf("ollama-mgr HTTP UI at http://%s/", listen)
+	select {}
+}
+
+func startServer(cfg config.Config, listenAddr string) (bound string, stop func()) {
 	_ = cfg.EnsureDirs()
 	fetched := map[string]bool{}
 	for _, b := range cfg.LoadFetchedBases() {
@@ -46,11 +82,11 @@ func Run(cfg config.Config) {
 		fetchedBases: fetched,
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	addr := ln.Addr().String()
+	bound = ln.Addr().String()
 	mux := http.NewServeMux()
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -77,28 +113,7 @@ func Run(cfg config.Config) {
 			log.Printf("http server: %v", err)
 		}
 	}()
-
-	url := "http://" + addr + "/"
-	// Prefer native WebView2 window; fall back to default browser.
-	w := webview2.NewWithOptions(webview2.WebViewOptions{
-		Debug:     false,
-		AutoFocus: true,
-		WindowOptions: webview2.WindowOptions{
-			Title:  "ollama-mgr",
-			Width:  1100,
-			Height: 640,
-			Center: true,
-		},
-	})
-	if w == nil {
-		log.Printf("WebView2 unavailable; opening browser at %s", url)
-		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-		// keep process alive serving HTTP
-		select {}
-	}
-	defer w.Destroy()
-	w.Navigate(url)
-	w.Run()
+	return bound, func() { _ = ln.Close() }
 }
 
 type server struct {
@@ -258,7 +273,7 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 			Released:  released,
 			Modified:  m.ModifiedAt.Local().Format("2006-01-02"),
 			Library:   p.LibraryURL(),
-			Status:    "â€”",
+			Status:    "-",
 			Origin:    oi,
 			Flag:      oi.Flag,
 		})

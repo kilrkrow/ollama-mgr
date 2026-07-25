@@ -127,14 +127,15 @@ internal/ui/gui/      WebView2 + embedded HTML UI
 
 ## Screenshots
 
-Capture from a real install and drop into `docs/screenshots/` (optional):
+Captured from a live local Ollama install (re-run `.\scripts\capture-screenshots.ps1` anytime):
 
-1. **Family** — Ctry column, solid/outline sizes, feature chips  
-2. **Tag** — status column shows ASCII `-` / `OK` / update text (no mojibake)  
-3. **Popular** — top 10/25 with features and Fetch  
-4. **+ Family** — search hits and fetched empty matrix  
+| View | Preview |
+|------|---------|
+| **Family** | ![Family view](docs/screenshots/family.png) |
+| **Tag** | ![Tag view](docs/screenshots/tag.png) |
+| **Popular** | ![Popular view](docs/screenshots/popular.png) |
 
-Until then, run the GUI against your local Ollama to verify.
+Flags in **Ctry** use [flagcdn](https://flagcdn.com) PNGs (WebView2 often botches emoji flags).
 
 ## License
 
