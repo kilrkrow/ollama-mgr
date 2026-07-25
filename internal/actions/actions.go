@@ -40,13 +40,13 @@ type UpgradeRequest struct {
 
 // Event is a progress / phase update during ApplyUpgrade.
 type Event struct {
-	Phase    Phase              `json:"phase"`
-	Message  string             `json:"message"`
-	From     string             `json:"from,omitempty"`
-	To       string             `json:"to,omitempty"`
-	Mode     Mode               `json:"mode,omitempty"`
-	Pull     *ollama.PullProgress `json:"pull,omitempty"`
-	// Percent is 0â€“100 when known from pull totals; -1 if unknown.
+	Phase   Phase                `json:"phase"`
+	Message string               `json:"message"`
+	From    string               `json:"from,omitempty"`
+	To      string               `json:"to,omitempty"`
+	Mode    Mode                 `json:"mode,omitempty"`
+	Pull    *ollama.PullProgress `json:"pull,omitempty"`
+	// Percent is 0-100 when known from pull totals; -1 if unknown.
 	Percent float64 `json:"percent"`
 }
 
@@ -59,16 +59,20 @@ type UpgradeResult struct {
 	AlreadyHad bool `json:"already_had,omitempty"`
 }
 
+// ModelAPI is the subset of ollama.Client used by upgrades (mockable in tests).
+type ModelAPI interface {
+	List(ctx context.Context) ([]ollama.Model, error)
+	Pull(ctx context.Context, name string, onProgress func(ollama.PullProgress)) error
+	Delete(ctx context.Context, name string) error
+}
+
 // ApplyUpgrade runs skip / side-by-side / swap / pull.
 // onEvent is optional; used for staged UI (pending delete + download row).
 //
 // Swap safety: always pull+verify target BEFORE deleting the old model.
 // If pull or verify fails, the old model is left untouched.
-func ApplyUpgrade(ctx context.Context, client *ollama.Client, req UpgradeRequest, onEvent func(Event)) (*UpgradeResult, error) {
+func ApplyUpgrade(ctx context.Context, client ModelAPI, req UpgradeRequest, onEvent func(Event)) (*UpgradeResult, error) {
 	emit := func(e Event) {
-		if e.Percent == 0 && e.Pull == nil && e.Phase != PhasePulling {
-			// leave 0 only when intentionally set; default unknown as -1 for non-pull
-		}
 		if onEvent != nil {
 			e.From = req.From
 			e.To = req.To
@@ -98,13 +102,19 @@ func ApplyUpgrade(ctx context.Context, client *ollama.Client, req UpgradeRequest
 				return nil, fmt.Errorf("swap from and to are the same model (%s)", req.From)
 			}
 		}
+		if target == "" {
+			return nil, fmt.Errorf("target model required")
+		}
+		if client == nil {
+			return nil, fmt.Errorf("ollama client required")
+		}
 
 		// Snapshot: was target already installed?
 		hadBefore, _ := modelPresent(ctx, client, target)
 
 		emit(Event{
 			Phase:   PhasePulling,
-			Message: fmt.Sprintf("pulling %sâ€¦", target),
+			Message: fmt.Sprintf("pulling %s...", target),
 			To:      target,
 			Percent: 0,
 		})
@@ -149,7 +159,7 @@ func ApplyUpgrade(ctx context.Context, client *ollama.Client, req UpgradeRequest
 		if req.Mode == ModeSwap {
 			emit(Event{
 				Phase:   PhaseDeleting,
-				Message: fmt.Sprintf("download OK â€” removing %sâ€¦", req.From),
+				Message: fmt.Sprintf("download OK - removing %s...", req.From),
 				From:    req.From,
 				To:      target,
 				Percent: 100,
@@ -189,13 +199,12 @@ func sameModel(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
-func modelPresent(ctx context.Context, client *ollama.Client, name string) (bool, error) {
+func modelPresent(ctx context.Context, client ModelAPI, name string) (bool, error) {
 	models, err := client.List(ctx)
 	if err != nil {
 		return false, err
 	}
 	want := strings.ToLower(name)
-	// also match name without :latest
 	wantBase := want
 	if strings.HasSuffix(want, ":latest") {
 		wantBase = strings.TrimSuffix(want, ":latest")
@@ -205,14 +214,9 @@ func modelPresent(ctx context.Context, client *ollama.Client, name string) (bool
 		if n == want {
 			return true, nil
 		}
-		// ollama sometimes lists "foo" for foo:latest
 		if n == wantBase || n+":latest" == want {
 			return true, nil
 		}
-	}
-	// stronger check via show
-	if _, err := client.Show(ctx, name); err == nil {
-		return true, nil
 	}
 	return false, nil
 }
@@ -230,5 +234,5 @@ func pullStatusText(p ollama.PullProgress) string {
 	if p.Status != "" {
 		return p.Status
 	}
-	return "pullingâ€¦"
+	return "pulling..."
 }

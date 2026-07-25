@@ -3,7 +3,9 @@
 package ollama
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -11,8 +13,19 @@ import (
 func startServeDetached() error {
 	cmd := exec.Command("ollama", "serve")
 	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	if logPath := serveLogPath(); logPath != "" {
+		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
+		if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			cmd.Stdout = f
+			cmd.Stderr = f
+		} else {
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+		}
+	} else {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}
@@ -23,4 +36,12 @@ func startServeDetached() error {
 		_ = cmd.Process.Release()
 	}
 	return nil
+}
+
+func serveLogPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".cache", "ollama-mgr", "ollama-serve.log")
 }

@@ -21,13 +21,28 @@ type Client struct {
 }
 
 // New creates a client for the given base URL (no trailing slash).
+// Client-level Timeout is 0 so long pulls are not killed; individual methods
+// apply short context deadlines where appropriate.
 func New(baseURL string) *Client {
 	return &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		HTTPClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: 0, // per-request contexts control timeouts
 		},
 	}
+}
+
+const (
+	timeoutQuick   = 8 * time.Second  // ping / status
+	timeoutDefault = 60 * time.Second // list / show / delete
+	// pull: no extra client timeout; caller context + stream until EOF
+)
+
+func withTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // Model is a locally available model summary.
@@ -61,6 +76,8 @@ type tagsResponse struct {
 
 // List returns installed models.
 func (c *Client) List(ctx context.Context) ([]Model, error) {
+	ctx, cancel := withTimeout(ctx, timeoutDefault)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/tags", nil)
 	if err != nil {
 		return nil, err
@@ -100,6 +117,8 @@ type ShowResponse struct {
 
 // Show returns details for a model.
 func (c *Client) Show(ctx context.Context, name string) (*ShowResponse, error) {
+	ctx, cancel := withTimeout(ctx, timeoutDefault)
+	defer cancel()
 	body, _ := json.Marshal(map[string]string{"name": name})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/show", bytes.NewReader(body))
 	if err != nil {
@@ -163,16 +182,15 @@ func isHex(b byte) bool {
 
 // Delete removes a local model.
 func (c *Client) Delete(ctx context.Context, name string) error {
+	ctx, cancel := withTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	body, _ := json.Marshal(map[string]string{"name": name})
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/delete", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// delete can take a while on large models
-	client := *c.HTTPClient
-	client.Timeout = 10 * time.Minute
-	resp, err := client.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -267,7 +285,7 @@ func (c *Client) Ps(ctx context.Context) ([]RunningModel, error) {
 
 // Ping checks whether the daemon responds.
 func (c *Client) Ping(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := withTimeout(ctx, timeoutQuick)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/tags", nil)
 	if err != nil {

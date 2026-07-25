@@ -3,22 +3,35 @@
 package ollama
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 
 	"golang.org/x/sys/windows"
 )
 
 // startServeDetached launches `ollama serve` with no visible console and no
-// attachment to the parent terminal. The process continues after we return.
+// attachment to the parent terminal. Logs go to %LOCALAPPDATA%\ollama-mgr\ollama-serve.log.
 func startServeDetached() error {
 	cmd := exec.Command("ollama", "serve")
 	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	// CREATE_NO_WINDOW: no console for a console-subsystem child
-	// CREATE_NEW_PROCESS_GROUP: independent signal/job group from parent
-	// DETACHED_PROCESS: do not inherit the parent's console
+
+	if logPath := serveLogPath(); logPath != "" {
+		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
+		if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			cmd.Stdout = f
+			cmd.Stderr = f
+			// Process keeps the file handle; we intentionally do not Close here.
+		} else {
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+		}
+	} else {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	}
+
 	const flags = windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW | windows.DETACHED_PROCESS
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
@@ -27,9 +40,16 @@ func startServeDetached() error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	// Detach from Wait semantics so ollama-mgr can exit without reaping
 	if cmd.Process != nil {
 		_ = cmd.Process.Release()
 	}
 	return nil
+}
+
+func serveLogPath() string {
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" {
+		return ""
+	}
+	return filepath.Join(base, "ollama-mgr", "ollama-serve.log")
 }
