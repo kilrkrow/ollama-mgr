@@ -2,17 +2,21 @@ package gui
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/jchv/go-webview2"
 	"github.com/kilrkrow/ollama-mgr/internal/actions"
 	"github.com/kilrkrow/ollama-mgr/internal/catalog"
 	"github.com/kilrkrow/ollama-mgr/internal/config"
@@ -23,8 +27,10 @@ import (
 	"github.com/kilrkrow/ollama-mgr/internal/origin"
 	"github.com/kilrkrow/ollama-mgr/internal/registry"
 	"github.com/kilrkrow/ollama-mgr/internal/upgrade"
-	"github.com/jchv/go-webview2"
 )
+
+//go:embed static/*
+var staticFS embed.FS
 
 // Run starts a local API server and opens a WebView2 window (falls back to browser).
 func Run(cfg config.Config) {
@@ -46,11 +52,17 @@ func Run(cfg config.Config) {
 	}
 	addr := ln.Addr().String()
 	mux := http.NewServeMux()
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
 	mux.HandleFunc("/", srv.handleIndex)
 	mux.HandleFunc("/api/list", srv.handleList)
 	mux.HandleFunc("/api/families", srv.handleFamilies)
 	mux.HandleFunc("/api/library/search", srv.handleLibrarySearch)
 	mux.HandleFunc("/api/families/fetch", srv.handleFamilyFetch)
+	mux.HandleFunc("/api/popular", srv.handlePopular)
 	mux.HandleFunc("/api/status", srv.handleStatus)
 	mux.HandleFunc("/api/check", srv.handleCheck)
 	mux.HandleFunc("/api/delete", srv.handleDelete)
@@ -103,8 +115,101 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	b, err := staticFS.ReadFile("static/index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(indexHTML))
+	_, _ = w.Write(b)
+}
+
+func (s *server) handlePopular(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	top, _ := strconv.Atoi(r.URL.Query().Get("top"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	top = catalog.NormalizeTop(top)
+
+	_ = s.cfg.EnsureDirs()
+	cat := catalog.New(s.cfg.CacheDir, s.cfg.CacheTTL)
+	all, err := cat.Popular(ctx)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	pageItems, total := catalog.PopularPage(all, top, page, pageSize)
+
+	// Local size presence for outline vs solid
+	localByBase := map[string]map[string]bool{}
+	if models, err := s.client.List(ctx); err == nil {
+		for _, m := range models {
+			p := modelparse.Parse(m.Name, m.ParameterSize)
+			if localByBase[p.BaseName] == nil {
+				localByBase[p.BaseName] = map[string]bool{}
+			}
+			if p.SizeClass != "" {
+				localByBase[p.BaseName][p.SizeClass] = true
+			}
+		}
+	}
+
+	type item struct {
+		Rank            int               `json:"rank"`
+		Name            string            `json:"name"`
+		Pulls           string            `json:"pulls,omitempty"`
+		URL             string            `json:"url"`
+		Features        []string          `json:"features"`
+		Sizes           []string          `json:"sizes"`
+		InstalledSizes  map[string]bool   `json:"installed_sizes"`
+		Origin          origin.Info       `json:"origin"`
+	}
+	out := make([]item, 0, len(pageItems))
+	// Enrich only this page (lazy)
+	var wg sync.WaitGroup
+	mu := sync.Mutex{}
+	sem := make(chan struct{}, 4)
+	results := make([]item, len(pageItems))
+	for i, pi := range pageItems {
+		i, pi := i, pi
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			it := item{
+				Rank:           pi.Rank,
+				Name:           pi.Name,
+				Pulls:          pi.Pulls,
+				URL:            pi.URL,
+				Origin:         origin.Lookup(pi.Name),
+				InstalledSizes: localByBase[pi.Name],
+			}
+			if it.InstalledSizes == nil {
+				it.InstalledSizes = map[string]bool{}
+			}
+			if pills, err := cat.FamilyPills(ctx, pi.Name); err == nil {
+				it.Features = pills.Features
+				it.Sizes = pills.Sizes
+			}
+			mu.Lock()
+			results[i] = it
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	out = append(out, results...)
+
+	writeJSON(w, map[string]any{
+		"top":       top,
+		"page":      page,
+		"page_size": pageSize,
+		"total":     total,
+		"items":     out,
+	})
 }
 
 func (s *server) handleList(w http.ResponseWriter, r *http.Request) {

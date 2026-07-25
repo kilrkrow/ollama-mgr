@@ -13,6 +13,7 @@ Ollama does not really “manage” what you have downloaded. This fills that ga
 | **List** | Installed models with size, params, quant, **Released** (upstream library Updated), Downloaded (local), library URL |
 | **Family view** | Group by base model with **feature pills** and **size pills** (solid = on disk, outline = available → click to pull) |
 | **+ Family** | Search the library and fetch a line you don’t have yet (features + outline sizes; nothing downloads until you click a pill). Board persists under `%APPDATA%\ollama-mgr\` |
+| **Popular** | Browse top 10/25/50/100 by ollama.com library order (download rank). Features explain “why care”; Fetch / size pills pull explicitly |
 | **Flags** | Curated country-of-origin chips (lab HQ). **Not** from the Ollama API — see `internal/origin` |
 | **Selection** | Click row = select · Ctrl+click = toggle · Shift+click = range · Esc = clear (no always-on checkboxes) |
 | **Digest updates** | Compare local weight digests to `registry.ollama.ai` without pulling |
@@ -126,7 +127,14 @@ internal/ui/gui/      WebView2 + embedded HTML UI
 
 ## Screenshots
 
-_TODO: add screenshots from a real install (Family + flags, Tag view, + Family, staged job)._
+Capture from a real install and drop into `docs/screenshots/` (optional):
+
+1. **Family** — Ctry column, solid/outline sizes, feature chips  
+2. **Tag** — status column shows ASCII `-` / `OK` / update text (no mojibake)  
+3. **Popular** — top 10/25 with features and Fetch  
+4. **+ Family** — search hits and fetched empty matrix  
+
+Until then, run the GUI against your local Ollama to verify.
 
 ## License
 

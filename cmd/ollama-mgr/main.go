@@ -123,14 +123,15 @@ func cmdList() *cobra.Command {
 				for _, f := range fams {
 					total += f.DiskBytes
 					org := f.Origin
-					flagLine := org.Flag + " " + org.Code
-					if org.Org != "" {
-						flagLine += " Â· " + org.Org
+					ctry := org.Code
+					if org.Unknown || ctry == "" {
+						ctry = "?"
 					}
-					if org.Unknown {
-						flagLine = "ðŸ³ï¸ unknown"
+					// Origin only once as [CTRY] prefix — not repeated after the name
+					fmt.Printf("[%s] %s\n", ctry, f.Base)
+					if org.Org != "" && !org.Unknown {
+						fmt.Printf("  origin:   %s · %s\n", org.Name, org.Org)
 					}
-					fmt.Printf("%s  %s\n", f.Base, flagLine)
 					// features
 					var feats []string
 					for _, fp := range f.Features {
@@ -274,9 +275,9 @@ func cmdList() *cobra.Command {
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if fetchRelease {
-				fmt.Fprintln(w, "FLAG\tORIGIN\tNAME\tSIZE\tPARAMS\tQUANT\tRELEASED\tDOWNLOADED\tLIBRARY")
+				fmt.Fprintln(w, "CTRY\tNAME\tSIZE\tPARAMS\tQUANT\tRELEASED\tDOWNLOADED\tLIBRARY")
 			} else {
-				fmt.Fprintln(w, "FLAG\tORIGIN\tNAME\tSIZE\tPARAMS\tQUANT\tDOWNLOADED\tLIBRARY")
+				fmt.Fprintln(w, "CTRY\tNAME\tSIZE\tPARAMS\tQUANT\tDOWNLOADED\tLIBRARY")
 			}
 			var total int64
 			for _, r := range rows {
@@ -286,10 +287,14 @@ func cmdList() *cobra.Command {
 				if code == "" {
 					code = "?"
 				}
+				// Single origin cell: emoji (terminals that support it) + ISO code — not repeated in NAME
+				ctry := code
+				if oi.Flag != "" && oi.Flag != "🏳️" {
+					ctry = oi.Flag + " " + code
+				}
 				if fetchRelease {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-						oi.Flag,
-						code,
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+						ctry,
 						r.Name,
 						ollama.FormatSize(r.Size),
 						r.ParameterSize,
@@ -299,9 +304,8 @@ func cmdList() *cobra.Command {
 						r.LibraryURL,
 					)
 				} else {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-						oi.Flag,
-						code,
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+						ctry,
 						r.Name,
 						ollama.FormatSize(r.Size),
 						r.ParameterSize,

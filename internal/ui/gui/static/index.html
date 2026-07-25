@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ollama-mgr</title>
+<link rel="stylesheet" href="/static/app.css"/>
+</head>
+<body>
+<header>
+  <h1>ollama-mgr</h1>
+  <div class="view-toggle">
+    <button type="button" id="btnViewFamily" class="on" title="Group by model family">Family</button>
+    <button type="button" id="btnViewTag" title="One row per installed tag">Tag</button>
+    <button type="button" id="btnViewPopular" title="Popular library models by download rank">Popular</button>
+  </div>
+  <button id="btnAddFamily" title="Fetch a library family you do not have yet">+ Family</button>
+  <button class="primary" id="btnRefresh">Refresh</button>
+  <button id="btnCheck">Check updates</button>
+  <button id="btnUpgrade">Upgrade...</button>
+  <button id="btnOpen">Open listing</button>
+  <button id="btnRun" title="Open a console and chat (ollama run). Select one installed model first.">Run model</button>
+  <button class="danger" id="btnDelete">Delete</button>
+  <button id="btnServe" title="Start the Ollama daemon if it is not running (ollama serve).">Start server</button>
+</header>
+<div id="status">Loading...</div>
+<div id="addBar">
+  <label for="addQuery" class="muted" style="margin:0">Library family:</label>
+  <input type="text" id="addQuery" placeholder="e.g. mistral, qwen3-coder, gemma4" autocomplete="off"/>
+  <button class="primary" id="btnAddDo">Fetch</button>
+  <button id="btnAddCancel">Cancel</button>
+  <span class="muted" id="addHint">Exact name or pick a hit. Fetches features + size pills (nothing downloads yet).</span>
+  <div id="addHits"></div>
+</div>
+<div id="popularBar">
+  <span class="muted" style="margin:0">Top by library order (pulls):</span>
+  <button type="button" class="pop-top on" data-top="10">10</button>
+  <button type="button" class="pop-top" data-top="25">25</button>
+  <button type="button" class="pop-top" data-top="50">50</button>
+  <button type="button" class="pop-top" data-top="100">100</button>
+  <button type="button" id="btnPopPrev">Prev</button>
+  <span id="popPageLabel" class="muted">-</span>
+  <button type="button" id="btnPopNext">Next</button>
+  <span class="muted">Page size 10. Features show why you might want it. Fetch adds outline sizes - pull is explicit.</span>
+</div>
+<div class="legend" id="familyLegend">
+  Size pills: <strong style="color:#bbf7d0">solid</strong> = downloaded /
+  <span style="border:1px dashed #64748b;border-radius:999px;padding:0 6px">outline</span> = available (click to pull) /
+  solid indigo features = on your install / dashed = library-only /
+  <strong style="color:#e9d5ff">+ Family</strong> = fetch library line /
+  Select: click / Ctrl / Shift (no checkboxes)
+</div>
+<div id="selectionBar">
+  <span id="selCount">Nothing selected</span>
+  <span class="muted" style="margin:0">Click = select / Ctrl+click = toggle / Shift+click = range / Esc = clear</span>
+  <button id="btnBatchCheck">Check selected</button>
+  <button id="btnBatchOpen">Open listings</button>
+  <button class="danger" id="btnBatchDelete">Delete selected</button>
+  <button id="btnClearSel">Clear</button>
+</div>
+<main>
+  <div id="familyView">
+    <table>
+      <thead>
+        <tr>
+          <th title="Country of origin (lab HQ) - curated map, not from Ollama API">Ctry</th>
+          <th>Family</th>
+          <th>Features</th>
+          <th>Sizes</th>
+          <th>Disk</th>
+          <th>Tags</th>
+        </tr>
+      </thead>
+      <tbody id="familyBody"></tbody>
+    </table>
+    <div id="familyEmpty" class="empty hidden">No models yet. Use <strong>+ Family</strong> to fetch a library line, or pull with the CLI.</div>
+  </div>
+  <div id="tagView" class="hidden">
+    <table>
+      <thead>
+        <tr>
+          <th title="Country of origin (lab HQ)">Ctry</th>
+          <th class="sortable" data-sort="name">Name<span class="ind"></span></th>
+          <th class="sortable" data-sort="size">Size<span class="ind"></span></th>
+          <th class="sortable" data-sort="params">Params<span class="ind"></span></th>
+          <th>Quant</th>
+          <th class="sortable" data-sort="released">Released<span class="ind"></span></th>
+          <th>Downloaded</th>
+          <th>Status</th>
+          <th>Library</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div id="popularView" class="hidden">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Ctry</th>
+          <th>Model</th>
+          <th>Pulls</th>
+          <th>Features</th>
+          <th>Sizes (outline = not local)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="popularBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<dialog id="upgradeDlg">
+  <div class="dlg-body">
+    <h2 style="margin:0 0 8px;font-size:16px;">Upgrade model</h2>
+    <p class="muted" id="upgradeFrom"></p>
+    <label for="target">Target model</label>
+    <input type="text" id="target"/>
+    <label>Mode</label>
+    <div class="radio"><input type="radio" name="mode" value="skip" id="m0"/><label for="m0" style="margin:0">Don't upgrade (skip)</label></div>
+    <div class="radio"><input type="radio" name="mode" value="side-by-side" id="m1" checked/><label for="m1" style="margin:0">Side-by-side (pull new, keep old)</label></div>
+    <div class="radio"><input type="radio" name="mode" value="swap" id="m2"/><label for="m2" style="margin:0">Swap (pull new, delete old)</label></div>
+    <div class="radio"><input type="radio" name="mode" value="pull" id="m3"/><label for="m3" style="margin:0">Re-pull same tag (digest update)</label></div>
+  </div>
+  <div class="dlg-actions">
+    <button id="btnCancelUpgrade">Cancel</button>
+    <button class="primary" id="btnDoUpgrade">Go</button>
+  </div>
+</dialog>
+<script src="/static/app.js"></script>
+</body>
+</html>
