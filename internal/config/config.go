@@ -20,11 +20,12 @@ var Version = "0.1.0"
 
 // Config holds runtime settings for CLI and GUI.
 type Config struct {
-	Endpoint  string
-	CacheTTL  time.Duration
-	Pinned    map[string]bool
-	CacheDir  string
-	ConfigDir string
+	Endpoint         string
+	CacheTTL         time.Duration
+	Pinned           map[string]bool
+	CacheDir         string
+	ConfigDir        string
+	AutoStartServer  bool // if true, GUI tries ollama serve when API is down
 }
 
 // Default returns config with sensible defaults, env overrides applied.
@@ -42,15 +43,27 @@ func Default() Config {
 		}
 	}
 
+	// Default ON for manager UX; set OLLAMA_MGR_AUTO_START=0 to disable.
+	autoStart := true
+	if v := strings.TrimSpace(os.Getenv("OLLAMA_MGR_AUTO_START")); v != "" {
+		switch strings.ToLower(v) {
+		case "0", "false", "no", "off":
+			autoStart = false
+		case "1", "true", "yes", "on":
+			autoStart = true
+		}
+	}
+
 	configDir := configDirPath()
 	cacheDir := filepath.Join(localAppData(), AppName, "cache")
 
 	return Config{
-		Endpoint:  endpoint,
-		CacheTTL:  cacheTTL,
-		Pinned:    map[string]bool{},
-		CacheDir:  cacheDir,
-		ConfigDir: configDir,
+		Endpoint:        endpoint,
+		CacheTTL:        cacheTTL,
+		Pinned:          map[string]bool{},
+		CacheDir:        cacheDir,
+		ConfigDir:       configDir,
+		AutoStartServer: autoStart,
 	}
 }
 

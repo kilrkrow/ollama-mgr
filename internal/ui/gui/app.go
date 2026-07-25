@@ -107,6 +107,7 @@ func startServer(cfg config.Config, listenAddr string) (bound string, stop func(
 	mux.HandleFunc("/api/open", srv.handleOpen)
 	mux.HandleFunc("/api/run", srv.handleRun)
 	mux.HandleFunc("/api/serve", srv.handleServe)
+	mux.HandleFunc("/api/config", srv.handleConfig)
 
 	go func() {
 		if err := http.Serve(ln, mux); err != nil {
@@ -732,8 +733,21 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {
+	// GET /api/serve?auto=1 — used by GUI on load; respects AutoStartServer config
+	if r.Method == http.MethodGet {
+		auto := r.URL.Query().Get("auto") == "1"
+		if auto && !s.cfg.AutoStartServer {
+			writeJSON(w, map[string]any{
+				"up":      s.client.Ping(r.Context()) == nil,
+				"skipped": true,
+				"message": "auto-start disabled (OLLAMA_MGR_AUTO_START=0)",
+			})
+			return
+		}
+	}
+
 	if err := s.client.Ping(r.Context()); err == nil {
-		writeJSON(w, map[string]string{"message": "already up"})
+		writeJSON(w, map[string]any{"up": true, "message": "already up"})
 		return
 	}
 	if err := ollama.StartServe(); err != nil {
@@ -741,15 +755,29 @@ func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Poll briefly so the UI can flip to UP without a console window
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 24; i++ {
 		time.Sleep(250 * time.Millisecond)
 		if err := s.client.Ping(r.Context()); err == nil {
-			writeJSON(w, map[string]string{"message": "started in background"})
+			writeJSON(w, map[string]any{
+				"up":           true,
+				"auto_started": true,
+				"message":      "started in background",
+			})
 			return
 		}
 	}
-	writeJSON(w, map[string]string{
+	writeJSON(w, map[string]any{
+		"up":      false,
 		"message": "started process but API not reachable yet; check Ollama install / port 11434",
+	})
+}
+
+// handleConfig exposes non-secret settings the UI needs (e.g. auto-start).
+func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{
+		"endpoint":           s.cfg.Endpoint,
+		"auto_start_server":  s.cfg.AutoStartServer,
+		"version":            config.Version,
 	})
 }
 

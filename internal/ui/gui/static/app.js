@@ -647,16 +647,76 @@ async function pullSize(pullTag) {
   }
 }
 
+/** If daemon is down, try headless ollama serve once (respects server auto-start config). */
+async function ensureServerRunning(reason) {
+  try {
+    var st = await api('/api/status');
+    if (st.up) return { ok: true, already: true, endpoint: st.endpoint };
+  } catch (e) { /* fall through */ }
+  setStatus((reason || 'Ollama is down') + ' - starting server in background...');
+  try {
+    var res = await api('/api/serve?auto=1', { method: 'POST' });
+    // POST does not skip when auto_start disabled - GET with auto=1 does.
+    // Use POST for explicit Start server; for auto use GET first.
+  } catch (e) {
+    // try GET auto path for policy, then POST
+  }
+  try {
+    // Prefer POST for actual start (always allowed when user/action needs API)
+    var res = await api('/api/serve', { method: 'POST' });
+    if (res.up || res.message === 'already up' || res.message === 'started in background') {
+      return { ok: true, auto_started: !!res.auto_started || res.message === 'started in background', message: res.message };
+    }
+    return { ok: false, message: res.message || 'could not start' };
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+}
+
 async function refresh(keepJobStatus) {
   if (!keepJobStatus) setStatus('Loading models...');
   try {
-    const st = await api('/api/status');
+    var st = await api('/api/status');
+    var autoNote = '';
+    if (!st.up) {
+      setStatus((st.endpoint || '') + ' | DOWN - starting Ollama in background...');
+      // Respect AutoStartServer: GET ?auto=1 may skip
+      var cfg = {};
+      try { cfg = await api('/api/config'); } catch (e) { cfg = { auto_start_server: true }; }
+      if (cfg.auto_start_server !== false) {
+        try {
+          var started = await api('/api/serve', { method: 'POST' });
+          if (started.up || started.message === 'started in background' || started.message === 'already up') {
+            autoNote = ' (auto-started)';
+            st = await api('/api/status');
+          } else {
+            models = [];
+            families = [];
+            render();
+            setStatus((st.endpoint || '') + ' | DOWN - ' + (started.message || 'could not start Ollama') +
+              ' | Open the tray app or click Start server');
+            return;
+          }
+        } catch (e) {
+          models = [];
+          families = [];
+          render();
+          setStatus((st.endpoint || '') + ' | DOWN - ' + e.message + ' | Open the Ollama tray app or click Start server');
+          return;
+        }
+      } else {
+        models = [];
+        families = [];
+        render();
+        setStatus((st.endpoint || '') + ' | DOWN - auto-start disabled | Click Start server or set OLLAMA_MGR_AUTO_START=1');
+        return;
+      }
+    }
     if (!st.up) {
       models = [];
       families = [];
       render();
-      setStatus((st.endpoint || '') + ' | DOWN - ' + (st.message || 'Ollama not reachable') +
-        ' | Start server or fix OLLAMA_HOST (0.0.0.0 is rewritten to 127.0.0.1)');
+      setStatus((st.endpoint || '') + ' | still DOWN after start attempt');
       return;
     }
     const data = await api('/api/list');
@@ -674,7 +734,7 @@ async function refresh(keepJobStatus) {
     else render();
     ensureJobPoll();
     if (!keepJobStatus || !activeJobs().length) {
-      setStatus(st.endpoint + ' | ' + st.message + ' | ' +
+      setStatus(st.endpoint + ' | ' + st.message + autoNote + ' | ' +
         (famData.count || 0) + ' families / ' + (data.count || 0) + ' tags | ' + (data.total || ''));
     }
   } catch (e) {
@@ -803,6 +863,14 @@ document.getElementById('btnBatchOpen').onclick = async function() {
 };
 document.getElementById('btnRun').onclick = async function() {
   var n = requireRunnableModel(); if (!n) return;
+  // Ensure API is up before launching chat (model load still happens in the new console)
+  try {
+    var st = await api('/api/status');
+    if (!st.up) {
+      setStatus('Ollama down - starting server before run...');
+      await api('/api/serve', { method: 'POST' });
+    }
+  } catch (e) { /* run may still work if ollama is on PATH */ }
   setStatus('Opening console: ollama run ' + n + '...');
   try {
     await api('/api/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: n})});

@@ -21,6 +21,7 @@ Ollama does not really “manage” what you have downloaded. This fills that ga
 | **Upgrade modes** | Skip · side-by-side · **staged swap** (DELETE PENDING → pull/verify → only then remove old) |
 | **Run model** | Opens a new console (`ollama run <tag>`). Needs exactly one selected installed model |
 | **Start server** | Starts the Ollama daemon if down (`ollama serve`) **in the background with no console window**. No model required |
+| **Auto-start** | GUI load/refresh: if the API is down, starts Ollama in the background once (status notes *auto-started*). Set `OLLAMA_MGR_AUTO_START=0` to disable |
 | **CLI + GUI** | Shared core; two Windows executables |
 
 ### Feature chips (legend)
@@ -85,6 +86,7 @@ Environment:
 | `OLLAMA_HOST` | Ollama API host (default `http://localhost:11434`). If set to `0.0.0.0:…` (bind address), ollama-mgr rewrites it to `127.0.0.1` for client connections |
 | `OLLAMA_MGR_CACHE_TTL_HOURS` | Catalog cache TTL (default 24) |
 | `OLLAMA_MGR_CONFIG_DIR` | Override config dir (default `%APPDATA%\ollama-mgr`) |
+| `OLLAMA_MGR_AUTO_START` | `1`/`true` (default) = GUI auto-starts Ollama when down; `0`/`false` = do not |
 
 ## GUI
 
