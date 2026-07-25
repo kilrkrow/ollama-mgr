@@ -19,6 +19,7 @@ import (
 	"github.com/guysc/ollama-mgr/internal/family"
 	"github.com/guysc/ollama-mgr/internal/modelparse"
 	"github.com/guysc/ollama-mgr/internal/ollama"
+	"github.com/guysc/ollama-mgr/internal/origin"
 	"github.com/guysc/ollama-mgr/internal/registry"
 	"github.com/guysc/ollama-mgr/internal/upgrade"
 	"github.com/spf13/cobra"
@@ -121,7 +122,15 @@ func cmdList() *cobra.Command {
 				var total int64
 				for _, f := range fams {
 					total += f.DiskBytes
-					fmt.Printf("%s\n", f.Base)
+					org := f.Origin
+					flagLine := org.Flag + " " + org.Code
+					if org.Org != "" {
+						flagLine += " · " + org.Org
+					}
+					if org.Unknown {
+						flagLine = "🏳️ unknown"
+					}
+					fmt.Printf("%s  %s\n", f.Base, flagLine)
 					// features
 					var feats []string
 					for _, fp := range f.Features {
@@ -265,14 +274,22 @@ func cmdList() *cobra.Command {
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if fetchRelease {
-				fmt.Fprintln(w, "NAME\tSIZE\tPARAMS\tQUANT\tRELEASED\tDOWNLOADED\tLIBRARY")
+				fmt.Fprintln(w, "FLAG\tORIGIN\tNAME\tSIZE\tPARAMS\tQUANT\tRELEASED\tDOWNLOADED\tLIBRARY")
 			} else {
-				fmt.Fprintln(w, "NAME\tSIZE\tPARAMS\tQUANT\tDOWNLOADED\tLIBRARY")
+				fmt.Fprintln(w, "FLAG\tORIGIN\tNAME\tSIZE\tPARAMS\tQUANT\tDOWNLOADED\tLIBRARY")
 			}
 			var total int64
 			for _, r := range rows {
+				p := modelparse.Parse(r.Name, r.ParameterSize)
+				oi := origin.Lookup(p.BaseName)
+				code := oi.Code
+				if code == "" {
+					code = "?"
+				}
 				if fetchRelease {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+						oi.Flag,
+						code,
 						r.Name,
 						ollama.FormatSize(r.Size),
 						r.ParameterSize,
@@ -282,7 +299,9 @@ func cmdList() *cobra.Command {
 						r.LibraryURL,
 					)
 				} else {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+						oi.Flag,
+						code,
 						r.Name,
 						ollama.FormatSize(r.Size),
 						r.ParameterSize,

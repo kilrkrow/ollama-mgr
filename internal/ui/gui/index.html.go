@@ -64,7 +64,9 @@ const indexHTML = `<!DOCTYPE html>
   td { padding: 7px 10px; border-bottom: 1px solid #1c2533; }
   tr.data { cursor: pointer; }
   tr.data:hover { background: var(--row-hover); }
-  tr.data.selected { background: #1e3a5f; }
+  tr.data.selected { background: #1e3a5f; outline: 1px solid #3b82f6; }
+  tr.data.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  th.chk, td.chk { display: none; } /* multi-select via Ctrl/Shift-click, not checkboxes */
   tr.job-row { background: #1a2838; }
   tr.job-row:hover { background: #223448; }
   tr.pending-delete td { opacity: 0.85; }
@@ -83,6 +85,36 @@ const indexHTML = `<!DOCTYPE html>
   .view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-right: 8px; }
   .view-toggle button { border: none; border-radius: 0; background: transparent; }
   .view-toggle button.on { background: var(--accent); color: #fff; }
+  #addBar {
+    display: none; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 8px 14px; background: #152033; border-bottom: 1px solid var(--border);
+  }
+  #addBar.visible { display: flex; }
+  #addBar input[type=text] {
+    flex: 1; min-width: 180px; max-width: 360px; padding: 7px 10px;
+    border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  #addHits { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+  #addHits button.hit {
+    font-size: 12px; padding: 4px 10px;
+  }
+  #addHits button.hit.exact { border-color: var(--ok); color: var(--ok); }
+  .pill.fetched-badge { border-color: #a855f7; color: #e9d5ff; background: #3b0764; font-size: 11px; }
+  .flag-cell {
+    text-align: center; width: 56px; min-width: 56px; vertical-align: middle;
+    font-family: "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", "Segoe UI", sans-serif;
+  }
+  .flag-chip {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; min-width: 40px; padding: 4px 6px; border-radius: 8px;
+    background: #1e293b; border: 1px solid var(--border);
+  }
+  .flag-chip .emoji { font-size: 22px; line-height: 1.1; }
+  .flag-chip .code { font-size: 11px; font-weight: 700; color: #e2e8f0; letter-spacing: 0.04em; }
+  .flag-inline {
+    font-family: "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    font-size: 16px; margin-right: 6px;
+  }
   .pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .pill {
     display: inline-flex; align-items: center; gap: 4px;
@@ -133,22 +165,34 @@ const indexHTML = `<!DOCTYPE html>
     <button type="button" id="btnViewFamily" class="on" title="Group by model family">Family</button>
     <button type="button" id="btnViewTag" title="One row per installed tag">Tag</button>
   </div>
+  <button id="btnAddFamily" title="Fetch a library family you don't have yet">+ Family</button>
   <button class="primary" id="btnRefresh">Refresh</button>
   <button id="btnCheck">Check updates</button>
   <button id="btnUpgrade">Upgrade…</button>
   <button id="btnOpen">Open listing</button>
-  <button id="btnRun">Run</button>
+  <button id="btnRun" title="Open a console and chat with the selected model (ollama run). Select a row first.">Run model</button>
   <button class="danger" id="btnDelete">Delete</button>
-  <button id="btnServe">Start serve</button>
+  <button id="btnServe" title="Start the Ollama daemon if it is not running (ollama serve). Does not load a model.">Start server</button>
 </header>
 <div id="status">Loading…</div>
+<div id="addBar">
+  <label for="addQuery" class="muted" style="margin:0">Library family:</label>
+  <input type="text" id="addQuery" placeholder="e.g. mistral, qwen3-coder, gemma4" autocomplete="off" />
+  <button class="primary" id="btnAddDo" title="Fetch exact match">Fetch</button>
+  <button id="btnAddCancel">Cancel</button>
+  <span class="muted" id="addHint">Exact name or pick a hit. Fetches features + size pills (nothing downloads yet).</span>
+  <div id="addHits"></div>
+</div>
 <div class="legend" id="familyLegend">
   Size pills: <strong style="color:#bbf7d0">solid</strong> = downloaded ·
   <span style="border:1px dashed #64748b;border-radius:999px;padding:0 6px">outline</span> = available (click to pull) ·
-  indigo chips = features (tools, vision, …)
+  indigo = features ·
+  <strong style="color:#e9d5ff">+ Family</strong> = fetch library line ·
+  Select rows with click / Ctrl / Shift (no checkboxes)
 </div>
 <div id="selectionBar">
   <span id="selCount">0 selected</span>
+  <span class="muted" style="margin:0">Click = select · Ctrl+click = toggle · Shift+click = range · Esc = clear</span>
   <button id="btnBatchCheck">Check selected</button>
   <button id="btnBatchOpen">Open listings</button>
   <button class="danger" id="btnBatchDelete">Delete selected</button>
@@ -160,6 +204,7 @@ const indexHTML = `<!DOCTYPE html>
       <thead>
         <tr>
           <th class="chk"><input type="checkbox" id="chkAllFamily" title="Select all families"/></th>
+          <th title="Curated country of origin (lab HQ) — not from Ollama API">Flag</th>
           <th>Family</th>
           <th>Features</th>
           <th>Sizes</th>
@@ -175,6 +220,7 @@ const indexHTML = `<!DOCTYPE html>
       <thead>
         <tr>
           <th class="chk"><input type="checkbox" id="chkAll" title="Select all"/></th>
+          <th title="Curated country of origin (lab HQ)">Flag</th>
           <th class="sortable" data-sort="name" title="Sort by name">Name<span class="ind"></span></th>
           <th class="sortable" data-sort="size" title="Sort by disk size">Size<span class="ind"></span></th>
           <th class="sortable" data-sort="params" title="Sort by parameter count">Params<span class="ind"></span></th>
@@ -210,8 +256,9 @@ const indexHTML = `<!DOCTYPE html>
 <script>
 let models = [];
 let families = [];
-let selected = null;
-let checked = {};
+let selected = null;       // primary / anchor tag name for range and Run
+let selectedSet = {};      // multi-select map of tag names
+let selectAnchor = null;   // shift-click range anchor
 let checkMap = {};
 let jobs = [];
 let sortKey = 'name';
@@ -219,14 +266,14 @@ let sortDir = 1; // 1 asc, -1 desc
 let pollTimer = null;
 let viewMode = 'family'; // family | tag
 let expandedFamily = {};
+let tagOrder = [];         // current visual order of tag names for shift-range
+let familyTagOrder = [];   // flat list of installed tags in family view order
 
 const tbody = document.getElementById('tbody');
 const familyBody = document.getElementById('familyBody');
 const statusEl = document.getElementById('status');
 const selBar = document.getElementById('selectionBar');
 const selCount = document.getElementById('selCount');
-const chkAll = document.getElementById('chkAll');
-const chkAllFamily = document.getElementById('chkAllFamily');
 const familyView = document.getElementById('familyView');
 const tagView = document.getElementById('tagView');
 const familyLegend = document.getElementById('familyLegend');
@@ -385,18 +432,105 @@ function esc(s) {
   });
 }
 
+/** Build flag cell HTML from origin object (emoji + ISO code — always visible). */
+function flagChipHTML(og) {
+  og = og || {};
+  var emoji = og.flag || '🏳️';
+  var code = og.code || '?';
+  var title = (og.name || 'Unknown') + (og.org ? ' · ' + og.org : '') + ' (curated origin; not from Ollama API)';
+  return '<div class="flag-chip" title="' + esc(title) + '">' +
+    '<span class="emoji">' + emoji + '</span>' +
+    '<span class="code">' + esc(code) + '</span></div>';
+}
+
+function flagInlineHTML(og) {
+  og = og || {};
+  var emoji = og.flag || '🏳️';
+  var code = og.code || '';
+  var title = (og.name || 'Unknown') + (og.org ? ' · ' + og.org : '');
+  return '<span class="flag-inline" title="' + esc(title) + '">' + emoji +
+    (code ? ' <span style="font-size:11px;color:var(--muted)">' + esc(code) + '</span>' : '') +
+    '</span>';
+}
+
 function selectedNames() {
-  return Object.keys(checked).filter(function(k) { return checked[k]; });
+  return Object.keys(selectedSet).filter(function(k) { return selectedSet[k]; });
+}
+
+function clearSelection() {
+  selectedSet = {};
+  selected = null;
+  selectAnchor = null;
+  updateSelectionBar();
+  render();
+}
+
+function selectOnly(name) {
+  selectedSet = {};
+  if (name) {
+    selectedSet[name] = true;
+    selected = name;
+    selectAnchor = name;
+  } else {
+    selected = null;
+    selectAnchor = null;
+  }
+  updateSelectionBar();
+}
+
+function toggleSelect(name) {
+  if (selectedSet[name]) {
+    delete selectedSet[name];
+    if (selected === name) {
+      var left = selectedNames();
+      selected = left.length ? left[left.length - 1] : null;
+    }
+  } else {
+    selectedSet[name] = true;
+    selected = name;
+  }
+  selectAnchor = name;
+  updateSelectionBar();
+}
+
+function rangeSelect(name, order) {
+  if (!selectAnchor || !order || !order.length) {
+    selectOnly(name);
+    return;
+  }
+  var a = order.indexOf(selectAnchor);
+  var b = order.indexOf(name);
+  if (a < 0 || b < 0) {
+    selectOnly(name);
+    return;
+  }
+  if (a > b) { var t = a; a = b; b = t; }
+  selectedSet = {};
+  for (var i = a; i <= b; i++) selectedSet[order[i]] = true;
+  selected = name;
+  updateSelectionBar();
+}
+
+/** Click / Ctrl+click / Shift+click on a selectable tag row */
+function handleRowSelect(ev, name, order) {
+  if (!name) return;
+  if (ev.shiftKey) {
+    rangeSelect(name, order || tagOrder);
+  } else if (ev.ctrlKey || ev.metaKey) {
+    toggleSelect(name);
+  } else {
+    selectOnly(name);
+  }
+  render();
+  if (selected) setStatus('Selected ' + selectedNames().join(', '));
 }
 
 function updateSelectionBar() {
   var names = selectedNames();
-  selCount.textContent = names.length + ' selected';
+  selCount.textContent = names.length === 0 ? 'Nothing selected' :
+    (names.length === 1 ? 'Selected: ' + names[0] : names.length + ' selected');
   if (names.length > 0) selBar.classList.add('visible');
   else selBar.classList.remove('visible');
-  var allOn = models.length > 0 && names.length === models.length;
-  chkAll.checked = allOn;
-  chkAll.indeterminate = names.length > 0 && !allOn;
 }
 
 function displayRows() {
@@ -492,34 +626,20 @@ function render() {
   });
   // Put synthetic download rows first so they're obvious
   var ordered = synth.concat(real);
+  tagOrder = real.map(function(m) { return m.name; });
 
   ordered.forEach(function(m) {
     const tr = document.createElement('tr');
+    var isSel = !m.synthetic && !!selectedSet[m.name];
     tr.className = 'data'
-      + (selected === m.name || (m.job && selected === m.job.to) ? ' selected' : '')
+      + (isSel ? ' selected' : '')
       + (m.synthetic ? ' job-row' : '')
       + (m.pending_delete ? ' pending-delete' : '');
     tr.onclick = function(e) {
-      if (e.target && e.target.type === 'checkbox') return;
       if (m.synthetic) return;
-      selected = m.name;
-      render();
+      if (e.target && (e.target.tagName === 'A' || e.target.closest && e.target.closest('a'))) return;
+      handleRowSelect(e, m.name, tagOrder);
     };
-
-    const tdChk = document.createElement('td');
-    tdChk.className = 'chk';
-    if (!m.synthetic) {
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = !!checked[m.name];
-      cb.onclick = function(e) {
-        e.stopPropagation();
-        checked[m.name] = cb.checked;
-        if (!cb.checked) delete checked[m.name];
-        updateSelectionBar();
-      };
-      tdChk.appendChild(cb);
-    }
 
     function tdText(t) {
       var td = document.createElement('td');
@@ -539,7 +659,18 @@ function render() {
       tdLib.textContent = 'pull → ' + m.job.to;
     }
 
+    var tdFlag = document.createElement('td');
+    tdFlag.className = 'flag-cell';
+    var og = m.origin || {};
+    if (!og.flag && m.flag) og = { flag: m.flag, code: (m.origin && m.origin.code) || '', name: (m.origin && m.origin.name) || '', org: (m.origin && m.origin.org) || '' };
+    tdFlag.innerHTML = flagChipHTML(og);
+
+    // empty cell for hidden chk column so col counts match thead
+    var tdChk = document.createElement('td');
+    tdChk.className = 'chk';
+
     tr.appendChild(tdChk);
+    tr.appendChild(tdFlag);
     tr.appendChild(tdText(m.name));
     tr.appendChild(tdText(m.size));
     tr.appendChild(tdText(m.params || ''));
@@ -566,39 +697,60 @@ function setViewMode(mode) {
 function renderFamily() {
   if (!familyBody) return;
   familyBody.innerHTML = '';
+  familyTagOrder = [];
+  families.forEach(function(f) {
+    (f.installed || []).forEach(function(t) { familyTagOrder.push(t.name); });
+  });
   families.forEach(function(f) {
     var tr = document.createElement('tr');
-    tr.className = 'data';
+    var famTags = (f.installed || []).map(function(t) { return t.name; });
+    var famSelected = famTags.some(function(n) { return selectedSet[n]; });
+    tr.className = 'data' + (famSelected ? ' selected' : '');
 
     var tdChk = document.createElement('td');
     tdChk.className = 'chk';
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    var allChecked = (f.installed || []).length > 0 && (f.installed || []).every(function(t) { return checked[t.name]; });
-    cb.checked = allChecked;
-    cb.onclick = function(e) {
-      e.stopPropagation();
-      (f.installed || []).forEach(function(t) {
-        if (cb.checked) checked[t.name] = true;
-        else delete checked[t.name];
-      });
-      updateSelectionBar();
-      renderFamily();
-    };
-    tdChk.appendChild(cb);
+
+    var tdFlag = document.createElement('td');
+    tdFlag.className = 'flag-cell';
+    var og = f.origin || {};
+    tdFlag.innerHTML = flagChipHTML(og);
 
     var tdName = document.createElement('td');
     var title = document.createElement('div');
     title.className = 'family-base';
+    var flagSpan = document.createElement('span');
+    flagSpan.innerHTML = flagInlineHTML(og);
+    title.appendChild(flagSpan);
     var link = document.createElement('a');
     link.href = f.library_url || ('https://ollama.com/library/' + f.base);
     link.target = '_blank';
     link.textContent = f.base;
     link.onclick = function(e) { e.stopPropagation(); };
     title.appendChild(link);
+    if (f.fetched && !f.on_disk) {
+      var badge = document.createElement('span');
+      badge.className = 'pill fetched-badge';
+      badge.textContent = 'fetched';
+      badge.style.marginLeft = '8px';
+      title.appendChild(badge);
+      var rm = document.createElement('button');
+      rm.textContent = '×';
+      rm.title = 'Remove from board';
+      rm.style.marginLeft = '6px';
+      rm.style.padding = '0 8px';
+      rm.onclick = function(e) {
+        e.stopPropagation();
+        removeFetched(f.base);
+      };
+      title.appendChild(rm);
+    }
     var meta = document.createElement('div');
     meta.className = 'family-meta';
-    meta.textContent = (f.tag_count || 0) + ' installed tag(s)';
+    if (f.on_disk) {
+      meta.textContent = (f.tag_count || 0) + ' installed tag(s)';
+    } else {
+      meta.textContent = 'not on disk — click a size pill to pull';
+    }
     tdName.appendChild(title);
     tdName.appendChild(meta);
     if (expandedFamily[f.base]) {
@@ -607,10 +759,10 @@ function renderFamily() {
       (f.installed || []).forEach(function(t) {
         var row = document.createElement('div');
         row.textContent = t.name + ' · ' + t.size_human + ' · ' + (t.quant || '');
+        if (selectedSet[t.name]) row.style.color = '#93c5fd';
         row.onclick = function(e) {
           e.stopPropagation();
-          selected = t.name;
-          setViewMode('tag');
+          handleRowSelect(e, t.name, familyTagOrder);
         };
         exp.appendChild(row);
       });
@@ -650,19 +802,13 @@ function renderFamily() {
         p.appendChild(sub);
       }
       if (sp.installed) {
-        p.title = 'Installed: ' + (sp.local_tags || []).join(', ');
+        p.title = 'Installed: ' + (sp.local_tags || []).join(', ') + ' — click to select for Run model';
         p.onclick = function(e) {
           e.stopPropagation();
           if (sp.local_tags && sp.local_tags.length) {
-            selected = sp.local_tags[0];
-            checked = {};
-            sp.local_tags.forEach(function(n) { checked[n] = true; });
-            updateSelectionBar();
-            if (sp.local_tags.length === 1) setViewMode('tag');
-            else {
-              expandedFamily[f.base] = true;
-              renderFamily();
-            }
+            handleRowSelect(e, sp.local_tags[0], familyTagOrder);
+            if (sp.local_tags.length > 1) expandedFamily[f.base] = true;
+            setStatus('Selected ' + selected + ' — Run model opens a chat console');
           }
         };
       } else {
@@ -694,12 +840,19 @@ function renderFamily() {
     };
     tdTags.appendChild(btn);
 
-    tr.onclick = function() {
+    tr.onclick = function(e) {
+      // Expand/collapse; if single installed tag, also select it for Run
+      if (e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest && e.target.closest('button,a,.pill'))) return;
       expandedFamily[f.base] = !expandedFamily[f.base];
+      if (famTags.length === 1) {
+        handleRowSelect(e, famTags[0], familyTagOrder);
+        return;
+      }
       renderFamily();
     };
 
     tr.appendChild(tdChk);
+    tr.appendChild(tdFlag);
     tr.appendChild(tdName);
     tr.appendChild(tdFeat);
     tr.appendChild(tdSizes);
@@ -707,14 +860,7 @@ function renderFamily() {
     tr.appendChild(tdTags);
     familyBody.appendChild(tr);
   });
-
-  if (chkAllFamily) {
-    var allTags = [];
-    families.forEach(function(f) { (f.installed || []).forEach(function(t) { allTags.push(t.name); }); });
-    var nOn = allTags.filter(function(n) { return checked[n]; }).length;
-    chkAllFamily.checked = allTags.length > 0 && nOn === allTags.length;
-    chkAllFamily.indeterminate = nOn > 0 && nOn < allTags.length;
-  }
+  updateSelectionBar();
 }
 
 async function pullSize(pullTag) {
@@ -748,10 +894,11 @@ async function refresh(keepJobStatus) {
     models = data.models || [];
     families = famData.families || [];
     jobs = jobData.jobs || [];
-    // drop checks for removed models
-    Object.keys(checked).forEach(function(k) {
-      if (!models.some(function(m) { return m.name === k; })) delete checked[k];
+    // drop selection for removed models
+    Object.keys(selectedSet).forEach(function(k) {
+      if (!models.some(function(m) { return m.name === k; })) delete selectedSet[k];
     });
+    if (selected && !isInstalledTag(selected)) selected = selectedNames()[0] || null;
     sortModels();
     render();
     ensureJobPoll();
@@ -791,40 +938,160 @@ async function checkNames(names) {
   }
 }
 
+// Resolve an installed tag for Run / Upgrade (exactly one).
+function requireRunnableModel() {
+  var list = selectedNames().filter(isInstalledTag);
+  if (list.length === 1) return list[0];
+  if (selected && isInstalledTag(selected) && list.length === 0) return selected;
+  if (list.length > 1) {
+    alert('Multiple models selected. Click one row (without Ctrl) for Run model, or use Delete for batch.');
+    return null;
+  }
+  alert(
+    'Select an installed model first:\n\n' +
+    '• Tag view: click a row\n' +
+    '• Family view: click a solid (green) size pill, or Show tags → click a tag\n' +
+    '• Ctrl+click / Shift+click for multi-select (batch delete/check only)'
+  );
+  return null;
+}
+
+function isInstalledTag(name) {
+  if (!name) return false;
+  return (models || []).some(function(m) { return m.name === name; });
+}
+
 function requireSelected() {
-  if (!selected) { alert('Select a model first (click a row).'); return null; }
-  return selected;
+  return requireRunnableModel();
 }
 
 function targetsForAction() {
-  var names = selectedNames();
+  var names = selectedNames().filter(isInstalledTag);
   if (names.length) return names;
-  if (selected) return [selected];
+  if (selected && isInstalledTag(selected)) return [selected];
   return [];
 }
 
-chkAll.onchange = function() {
-  if (chkAll.checked) {
-    models.forEach(function(m) { checked[m.name] = true; });
-  } else {
-    checked = {};
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    clearSelection();
+    setStatus('Selection cleared');
   }
-  render();
-};
+  if ((e.ctrlKey || e.metaKey) && e.key === 'a' && viewMode === 'tag') {
+    e.preventDefault();
+    selectedSet = {};
+    (tagOrder.length ? tagOrder : models.map(function(m) { return m.name; })).forEach(function(n) {
+      selectedSet[n] = true;
+    });
+    selected = tagOrder[0] || (models[0] && models[0].name) || null;
+    selectAnchor = selected;
+    updateSelectionBar();
+    render();
+  }
+});
 
 document.getElementById('btnViewFamily').onclick = function() { setViewMode('family'); };
 document.getElementById('btnViewTag').onclick = function() { setViewMode('tag'); };
-if (chkAllFamily) {
-  chkAllFamily.onchange = function() {
-    families.forEach(function(f) {
-      (f.installed || []).forEach(function(t) {
-        if (chkAllFamily.checked) checked[t.name] = true;
-        else delete checked[t.name];
-      });
-    });
-    render();
-  };
+document.getElementById('btnClearSel').onclick = function() { clearSelection(); };
+
+var addBar = document.getElementById('addBar');
+var addQuery = document.getElementById('addQuery');
+var addHits = document.getElementById('addHits');
+var addSearchTimer = null;
+var lastExact = '';
+
+function showAddBar(show) {
+  if (show) {
+    addBar.classList.add('visible');
+    setViewMode('family');
+    addQuery.value = '';
+    addHits.innerHTML = '';
+    lastExact = '';
+    addQuery.focus();
+  } else {
+    addBar.classList.remove('visible');
+    addHits.innerHTML = '';
+  }
 }
+
+async function runLibrarySearch() {
+  var q = addQuery.value.trim();
+  if (!q) { addHits.innerHTML = ''; lastExact = ''; return; }
+  try {
+    var data = await api('/api/library/search?q=' + encodeURIComponent(q));
+    lastExact = data.exact || '';
+    addHits.innerHTML = '';
+    (data.results || []).slice(0, 12).forEach(function(h) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hit' + (data.exact && h.name.toLowerCase() === data.exact.toLowerCase() ? ' exact' : '');
+      b.textContent = h.name;
+      b.onclick = function() { fetchFamily(h.name); };
+      addHits.appendChild(b);
+    });
+    if (!(data.results || []).length) {
+      addHits.innerHTML = '<span class="muted">No library hits</span>';
+    }
+  } catch (e) {
+    addHits.innerHTML = '<span class="muted">' + esc(e.message) + '</span>';
+  }
+}
+
+async function fetchFamily(name) {
+  if (!name) name = lastExact || addQuery.value.trim();
+  if (!name) { alert('Enter a library model name'); return; }
+  setStatus('Fetching family ' + name + '…');
+  try {
+    var res = await api('/api/families/fetch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name})
+    });
+    showAddBar(false);
+    await refresh();
+    expandedFamily[res.added || name] = true;
+    renderFamily();
+    setStatus('Fetched ' + (res.added || name) + (res.already_on_disk ? ' (already on disk)' : ' — sizes outlined; click to pull'));
+  } catch (e) {
+    alert(e.message);
+    setStatus(e.message);
+  }
+}
+
+async function removeFetched(name) {
+  try {
+    await api('/api/families/fetch?name=' + encodeURIComponent(name), {method: 'DELETE'});
+    await refresh();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+document.getElementById('btnAddFamily').onclick = function() { showAddBar(true); };
+document.getElementById('btnAddCancel').onclick = function() { showAddBar(false); };
+document.getElementById('btnAddDo').onclick = function() {
+  var name = lastExact || addQuery.value.trim();
+  if (!lastExact && name) {
+    // require exact from last search if possible
+    runLibrarySearch().then(function() {
+      if (lastExact) fetchFamily(lastExact);
+      else alert('No exact library match for "' + name + '". Pick a hit from the list.');
+    });
+    return;
+  }
+  fetchFamily(name);
+};
+addQuery.addEventListener('input', function() {
+  clearTimeout(addSearchTimer);
+  addSearchTimer = setTimeout(runLibrarySearch, 280);
+});
+addQuery.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('btnAddDo').click();
+  }
+  if (e.key === 'Escape') showAddBar(false);
+});
 document.getElementById('btnRefresh').onclick = refresh;
 document.getElementById('btnCheck').onclick = function() {
   var names = selectedNames();
@@ -835,10 +1102,7 @@ document.getElementById('btnBatchCheck').onclick = function() {
   if (!names.length) return;
   checkNames(names);
 };
-document.getElementById('btnClearSel').onclick = function() {
-  checked = {};
-  render();
-};
+
 document.getElementById('btnOpen').onclick = async function() {
   var names = targetsForAction();
   if (!names.length) { alert('Select or check a model first.'); return; }
@@ -858,11 +1122,11 @@ document.getElementById('btnBatchOpen').onclick = async function() {
   });
 };
 document.getElementById('btnRun').onclick = async function() {
-  var n = requireSelected(); if (!n) return;
-  setStatus('Starting ollama run ' + n + '…');
+  var n = requireRunnableModel(); if (!n) return;
+  setStatus('Opening console: ollama run ' + n + '…');
   try {
     await api('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:n})});
-    setStatus('Launched ' + n);
+    setStatus('Opened new console for ' + n + ' (chat there; this window stays open)');
   } catch(e) { setStatus(e.message); alert(e.message); }
 };
 async function deleteNames(names) {
@@ -874,7 +1138,7 @@ async function deleteNames(names) {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({names: names})
     });
-    names.forEach(function(n) { delete checked[n]; if (selected === n) selected = null; });
+    names.forEach(function(n) { delete selectedSet[n]; if (selected === n) selected = null; });
     if (res.failed && res.failed.length) alert('Some deletes failed:\n' + res.failed.join('\n'));
     await refresh();
   } catch(e) { alert(e.message); setStatus(e.message); }
@@ -888,10 +1152,14 @@ document.getElementById('btnBatchDelete').onclick = function() {
   deleteNames(selectedNames());
 };
 document.getElementById('btnServe').onclick = async function() {
+  setStatus('Checking / starting Ollama server…');
   try {
     var j = await api('/api/serve', {method:'POST'});
-    setStatus(j.message);
-    await refresh();
+    var msg = j.message || '';
+    if (msg === 'already up') msg = 'Ollama server is already running';
+    else if (msg === 'serve started') msg = 'Ollama server started (ollama serve)';
+    setStatus(msg);
+    await refresh(true);
   } catch(e) { alert(e.message); }
 };
 document.getElementById('btnUpgrade').onclick = function() {

@@ -20,6 +20,42 @@ func (f fakeEnrich) FamilyPills(ctx context.Context, base string) (catalog.Famil
 	return catalog.FamilyPills{}, nil
 }
 
+func TestFetchLibraryFamilyEmptySizesOutline(t *testing.T) {
+	enrich := fakeEnrich{pills: map[string]catalog.FamilyPills{
+		"mistral": {Name: "mistral", Features: []string{"tools"}, Sizes: []string{"7b", "small"}},
+	}}
+	// CanonicalSizePills may drop "small" — use pure sizes
+	enrich.pills["mistral"] = catalog.FamilyPills{Name: "mistral", Features: []string{"tools"}, Sizes: []string{"7b", "22b"}}
+	f, err := FetchLibraryFamily(context.Background(), "mistral", enrich)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.OnDisk || !f.Fetched {
+		t.Fatalf("expected fetched empty: %+v", f)
+	}
+	if len(f.Sizes) < 1 {
+		t.Fatal("expected size pills")
+	}
+	for _, s := range f.Sizes {
+		if s.Installed {
+			t.Fatalf("all should be outline: %+v", s)
+		}
+		if !s.Available {
+			t.Fatalf("should be available: %+v", s)
+		}
+	}
+}
+
+func TestGroupWithFetched(t *testing.T) {
+	enrich := fakeEnrich{pills: map[string]catalog.FamilyPills{
+		"mistral": {Name: "mistral", Features: []string{"tools"}, Sizes: []string{"7b"}},
+	}}
+	fams := GroupWithFetched(context.Background(), nil, []string{"mistral"}, enrich)
+	if len(fams) != 1 || fams[0].Base != "mistral" || !fams[0].Fetched {
+		t.Fatalf("%+v", fams)
+	}
+}
+
 func TestGroupSizePillsInstalledVsAvailable(t *testing.T) {
 	models := []ollama.Model{
 		{

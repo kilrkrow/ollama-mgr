@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/guysc/ollama-mgr/internal/jobs"
 	"github.com/guysc/ollama-mgr/internal/modelparse"
 	"github.com/guysc/ollama-mgr/internal/ollama"
+	"github.com/guysc/ollama-mgr/internal/origin"
 	"github.com/guysc/ollama-mgr/internal/registry"
 	"github.com/guysc/ollama-mgr/internal/upgrade"
 	"github.com/jchv/go-webview2"
@@ -28,9 +30,10 @@ import (
 func Run(cfg config.Config) {
 	_ = cfg.EnsureDirs()
 	srv := &server{
-		cfg:    cfg,
-		client: ollama.New(cfg.Endpoint),
-		jobs:   jobs.NewManager(),
+		cfg:          cfg,
+		client:       ollama.New(cfg.Endpoint),
+		jobs:         jobs.NewManager(),
+		fetchedBases: map[string]bool{},
 	}
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -42,6 +45,8 @@ func Run(cfg config.Config) {
 	mux.HandleFunc("/", srv.handleIndex)
 	mux.HandleFunc("/api/list", srv.handleList)
 	mux.HandleFunc("/api/families", srv.handleFamilies)
+	mux.HandleFunc("/api/library/search", srv.handleLibrarySearch)
+	mux.HandleFunc("/api/families/fetch", srv.handleFamilyFetch)
 	mux.HandleFunc("/api/status", srv.handleStatus)
 	mux.HandleFunc("/api/check", srv.handleCheck)
 	mux.HandleFunc("/api/delete", srv.handleDelete)
@@ -85,6 +90,8 @@ type server struct {
 	client *ollama.Client
 	jobs   *jobs.Manager
 	mu     sync.Mutex
+	// fetchedBases: library families added via "+" (session board; may have zero local tags).
+	fetchedBases map[string]bool
 }
 
 func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -112,15 +119,17 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 	upstream := cat.UpstreamUpdatedBatch(ctx, names)
 
 	type row struct {
-		Name      string `json:"name"`
-		Size      string `json:"size"`
-		SizeBytes int64  `json:"size_bytes"`
-		Params    string `json:"params"`
-		Quant     string `json:"quant"`
-		Released  string `json:"released"` // upstream library Updated date
-		Modified  string `json:"modified"` // local pull/modified
-		Library   string `json:"library"`
-		Status    string `json:"status"`
+		Name      string      `json:"name"`
+		Size      string      `json:"size"`
+		SizeBytes int64       `json:"size_bytes"`
+		Params    string      `json:"params"`
+		Quant     string      `json:"quant"`
+		Released  string      `json:"released"` // upstream library Updated date
+		Modified  string      `json:"modified"` // local pull/modified
+		Library   string      `json:"library"`
+		Status    string      `json:"status"`
+		Origin    origin.Info `json:"origin"`
+		Flag      string      `json:"flag"`
 	}
 	out := make([]row, 0, len(models))
 	var total int64
@@ -130,6 +139,7 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 		if meta, ok := upstream[m.Name]; ok && !meta.UpdatedAt.IsZero() {
 			released = meta.UpdatedAt.UTC().Format("2006-01-02")
 		}
+		oi := origin.Lookup(p.BaseName)
 		out = append(out, row{
 			Name:      m.Name,
 			Size:      ollama.FormatSize(m.Size),
@@ -140,6 +150,8 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 			Modified:  m.ModifiedAt.Local().Format("2006-01-02"),
 			Library:   p.LibraryURL(),
 			Status:    "—",
+			Origin:    oi,
+			Flag:      oi.Flag,
 		})
 		total += m.Size
 	}
@@ -159,7 +171,10 @@ func (s *server) handleFamilies(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.cfg.EnsureDirs()
 	cat := catalog.New(s.cfg.CacheDir, s.cfg.CacheTTL)
-	fams := family.Group(ctx, models, family.CatalogEnricher{C: cat})
+	fetched := s.listFetched()
+	fams := family.GroupWithFetched(ctx, models, fetched, family.CatalogEnricher{C: cat})
+	// Drop fetched bases that are now on disk from the session board (optional cleanup)
+	s.pruneFetchedOnDisk(fams)
 	var total int64
 	for _, f := range fams {
 		total += f.DiskBytes
@@ -169,7 +184,173 @@ func (s *server) handleFamilies(w http.ResponseWriter, r *http.Request) {
 		"count":    len(fams),
 		"tags":     len(models),
 		"total":    ollama.FormatSize(total),
+		"fetched":  s.listFetched(),
 	})
+}
+
+func (s *server) listFetched() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.fetchedBases))
+	for b := range s.fetchedBases {
+		out = append(out, b)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *server) pruneFetchedOnDisk(fams []family.Family) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, f := range fams {
+		if f.OnDisk {
+			delete(s.fetchedBases, f.Base)
+		}
+	}
+}
+
+func (s *server) handleLibrarySearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeJSON(w, map[string]any{"query": q, "results": []any{}, "exact": ""})
+		return
+	}
+	_ = s.cfg.EnsureDirs()
+	cat := catalog.New(s.cfg.CacheDir, s.cfg.CacheTTL)
+	entries, err := cat.Search(r.Context(), q)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	type hit struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	}
+	results := make([]hit, 0, len(entries))
+	exact := ""
+	ql := strings.ToLower(q)
+	// strip accidental tag
+	if i := strings.Index(ql, ":"); i >= 0 {
+		ql = ql[:i]
+	}
+	for _, e := range entries {
+		name := e.Name
+		results = append(results, hit{Name: name, URL: "https://ollama.com/library/" + name})
+		if strings.EqualFold(name, ql) {
+			exact = name
+		}
+	}
+	// Also accept exact base even if search ranking is weird: probe FamilyPills
+	if exact == "" {
+		if p, err := cat.FamilyPills(r.Context(), ql); err == nil && (len(p.Sizes) > 0 || p.Name != "") {
+			// verify page is real by sizes
+			if len(p.Sizes) > 0 {
+				exact = ql
+				// ensure in results
+				found := false
+				for _, h := range results {
+					if strings.EqualFold(h.Name, exact) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					results = append([]hit{{Name: exact, URL: "https://ollama.com/library/" + exact}}, results...)
+				}
+			}
+		}
+	}
+	writeJSON(w, map[string]any{
+		"query":   q,
+		"results": results,
+		"exact":   exact,
+	})
+}
+
+func (s *server) handleFamilyFetch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	_ = s.cfg.EnsureDirs()
+	cat := catalog.New(s.cfg.CacheDir, s.cfg.CacheTTL)
+	enrich := family.CatalogEnricher{C: cat}
+
+	switch r.Method {
+	case http.MethodPost:
+		var body struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+			writeErr(w, fmt.Errorf("name required"))
+			return
+		}
+		name := strings.TrimSpace(body.Name)
+		if i := strings.Index(name, ":"); i >= 0 {
+			name = name[:i]
+		}
+		// Prefer exact library identity from search
+		entries, _ := cat.Search(ctx, name)
+		resolved := ""
+		for _, e := range entries {
+			if strings.EqualFold(e.Name, name) {
+				resolved = e.Name
+				break
+			}
+		}
+		if resolved == "" {
+			// allow direct fetch if FamilyPills has sizes
+			f, err := family.FetchLibraryFamily(ctx, name, enrich)
+			if err != nil {
+				writeErr(w, fmt.Errorf("no exact library match for %q (pick a result from search)", name))
+				return
+			}
+			resolved = f.Base
+			s.mu.Lock()
+			s.fetchedBases[resolved] = true
+			s.mu.Unlock()
+			writeJSON(w, map[string]any{"family": f, "added": resolved})
+			return
+		}
+		f, err := family.FetchLibraryFamily(ctx, resolved, enrich)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		// If already on disk, still return merged view
+		models, _ := s.client.List(ctx)
+		for _, m := range models {
+			p := modelparse.Parse(m.Name, m.ParameterSize)
+			if strings.EqualFold(p.BaseName, resolved) {
+				// merge via GroupWithFetched
+				s.mu.Lock()
+				s.fetchedBases[resolved] = true
+				s.mu.Unlock()
+				fams := family.GroupWithFetched(ctx, models, s.listFetched(), enrich)
+				for _, fam := range fams {
+					if strings.EqualFold(fam.Base, resolved) {
+						writeJSON(w, map[string]any{"family": fam, "added": resolved, "already_on_disk": true})
+						return
+					}
+				}
+			}
+		}
+		s.mu.Lock()
+		s.fetchedBases[resolved] = true
+		s.mu.Unlock()
+		writeJSON(w, map[string]any{"family": f, "added": resolved})
+
+	case http.MethodDelete:
+		name := strings.TrimSpace(r.URL.Query().Get("name"))
+		if name == "" {
+			writeErr(w, fmt.Errorf("name required"))
+			return
+		}
+		s.mu.Lock()
+		delete(s.fetchedBases, name)
+		s.mu.Unlock()
+		writeJSON(w, map[string]any{"removed": name})
+
+	default:
+		http.Error(w, "POST or DELETE", http.StatusMethodNotAllowed)
+	}
 }
 
 func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -386,13 +567,24 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, fmt.Errorf("name required"))
 		return
 	}
-	// Launch in new console so GUI stays responsive
-	cmd := exec.Command("cmd", "/c", "start", "cmd", "/k", "ollama", "run", body.Name)
+	// Launch interactive chat in a *new* console window.
+	//
+	// Windows START treats the first *quoted* token as the window title.
+	// Wrong:  start "ollama run mistral:7b"   → tries to execute that string as a program
+	//          (Go re-quotes a single /C string and breaks nested quotes)
+	// Right:  start "" cmd.exe /K ollama run mistral:7b
+	//          empty title "", then real executable cmd.exe
+	cmd := exec.Command(
+		"cmd.exe", "/C",
+		"start", "",
+		"cmd.exe", "/K",
+		"ollama", "run", body.Name,
+	)
 	if err := cmd.Start(); err != nil {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, map[string]string{"ok": "started " + body.Name})
+	writeJSON(w, map[string]string{"ok": "opened console for ollama run " + body.Name})
 }
 
 func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {

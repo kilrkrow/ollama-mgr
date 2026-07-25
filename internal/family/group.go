@@ -2,6 +2,7 @@ package family
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/guysc/ollama-mgr/internal/catalog"
 	"github.com/guysc/ollama-mgr/internal/modelparse"
 	"github.com/guysc/ollama-mgr/internal/ollama"
+	"github.com/guysc/ollama-mgr/internal/origin"
 )
 
 // SizePill is a parameter-size chip (installed or available).
@@ -57,6 +59,12 @@ type Family struct {
 	DiskHuman    string         `json:"disk_human"`
 	TagCount     int            `json:"tag_count"`
 	Capabilities []string       `json:"capabilities"` // union local
+	// Origin is curated country-of-origin (lab HQ), not from Ollama API.
+	Origin origin.Info `json:"origin"`
+	// Fetched is true when this row was added via library fetch (+) and may have zero local tags.
+	Fetched bool `json:"fetched,omitempty"`
+	// OnDisk is true when at least one local tag exists for this base.
+	OnDisk bool `json:"on_disk"`
 }
 
 // Enricher supplies library metadata for a base name.
@@ -66,8 +74,16 @@ type Enricher interface {
 
 // Group builds families from local models. If enrich is non-nil, library pills are merged.
 func Group(ctx context.Context, models []ollama.Model, enrich Enricher) []Family {
+	return GroupWithFetched(ctx, models, nil, enrich)
+}
+
+// GroupWithFetched is like Group, but also includes library bases that may have no local tags
+// (added via "+" family fetch). fetchedBases that already appear in models are merged normally
+// and marked Fetched=false once on disk (still listed once).
+func GroupWithFetched(ctx context.Context, models []ollama.Model, fetchedBases []string, enrich Enricher) []Family {
 	byBase := map[string][]ollama.Model{}
 	order := []string{}
+	localSet := map[string]bool{}
 	for _, m := range models {
 		p := modelparse.Parse(m.Name, m.ParameterSize)
 		base := p.BaseName
@@ -78,12 +94,35 @@ func Group(ctx context.Context, models []ollama.Model, enrich Enricher) []Family
 			order = append(order, base)
 		}
 		byBase[base] = append(byBase[base], m)
+		localSet[base] = true
+	}
+
+	fetchedSet := map[string]bool{}
+	for _, b := range fetchedBases {
+		b = strings.TrimSpace(b)
+		if b == "" {
+			continue
+		}
+		// normalize: no tag
+		if i := strings.Index(b, ":"); i >= 0 {
+			b = b[:i]
+		}
+		if strings.Contains(b, "/") {
+			// user/model — keep as-is for now
+		}
+		fetchedSet[b] = true
+		if !localSet[b] {
+			if _, ok := byBase[b]; !ok {
+				order = append(order, b)
+				byBase[b] = nil
+			}
+		}
 	}
 	sort.Strings(order)
 
 	// parallel library fetch
 	type libRes struct {
-		base string
+		base  string
 		pills catalog.FamilyPills
 	}
 	libCh := make(chan libRes, len(order))
@@ -121,9 +160,45 @@ func Group(ctx context.Context, models []ollama.Model, enrich Enricher) []Family
 	for _, base := range order {
 		ms := byBase[base]
 		f := buildFamily(base, ms, libMap[base])
+		f.OnDisk = f.TagCount > 0
+		// Mark as fetched if user added via + and still not on disk (or always if in set and empty)
+		if fetchedSet[base] && !f.OnDisk {
+			f.Fetched = true
+		}
 		out = append(out, f)
 	}
 	return out
+}
+
+// FetchLibraryFamily loads library pills for base and returns a Family with no local tags
+// (all size pills outline). Used by "+" when the model is not installed yet.
+func FetchLibraryFamily(ctx context.Context, base string, enrich Enricher) (Family, error) {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return Family{}, fmt.Errorf("empty model name")
+	}
+	if i := strings.Index(base, ":"); i >= 0 {
+		base = base[:i]
+	}
+	var pills catalog.FamilyPills
+	if enrich != nil {
+		p, err := enrich.FamilyPills(ctx, base)
+		if err != nil {
+			return Family{}, err
+		}
+		pills = p
+	}
+	if len(pills.Sizes) == 0 && len(pills.Features) == 0 && pills.Name == "" {
+		// still allow empty-ish if page had no pills — but require enrich success with name
+		pills.Name = base
+	}
+	f := buildFamily(base, nil, pills)
+	f.Fetched = true
+	f.OnDisk = false
+	if len(f.Sizes) == 0 {
+		return f, fmt.Errorf("no size pills found for %q (not a known library model?)", base)
+	}
+	return f, nil
 }
 
 func buildFamily(base string, models []ollama.Model, lib catalog.FamilyPills) Family {
@@ -131,6 +206,11 @@ func buildFamily(base string, models []ollama.Model, lib catalog.FamilyPills) Fa
 		Base:       base,
 		LibraryURL: "https://ollama.com/library/" + base,
 		Installed:  make([]InstalledTag, 0, len(models)),
+		OnDisk:     len(models) > 0,
+		Origin:     origin.Lookup(base),
+	}
+	if models == nil {
+		models = []ollama.Model{}
 	}
 
 	// size class -> local tags
