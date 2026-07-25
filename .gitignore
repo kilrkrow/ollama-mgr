@@ -1,0 +1,8 @@
+dist/
+*.exe
+*.test
+*.out
+.idea/
+.vscode/
+*.dll
+tmp_debug.go
