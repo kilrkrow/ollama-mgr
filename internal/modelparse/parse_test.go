@@ -49,7 +49,7 @@ func TestSizeCompatible(t *testing.T) {
 		t.Fatal("near 33")
 	}
 	if !SizeCompatible("32b", "30b") {
-		t.Fatal("near 30 (qwen2.5 32b → qwen3 30b)")
+		t.Fatal("near 30 (qwen2.5 32b â†’ qwen3 30b)")
 	}
 	if SizeCompatible("7b", "32b") {
 		t.Fatal("different")

@@ -13,15 +13,15 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/guysc/ollama-mgr/internal/actions"
-	"github.com/guysc/ollama-mgr/internal/catalog"
-	"github.com/guysc/ollama-mgr/internal/config"
-	"github.com/guysc/ollama-mgr/internal/family"
-	"github.com/guysc/ollama-mgr/internal/modelparse"
-	"github.com/guysc/ollama-mgr/internal/ollama"
-	"github.com/guysc/ollama-mgr/internal/origin"
-	"github.com/guysc/ollama-mgr/internal/registry"
-	"github.com/guysc/ollama-mgr/internal/upgrade"
+	"github.com/kilrkrow/ollama-mgr/internal/actions"
+	"github.com/kilrkrow/ollama-mgr/internal/catalog"
+	"github.com/kilrkrow/ollama-mgr/internal/config"
+	"github.com/kilrkrow/ollama-mgr/internal/family"
+	"github.com/kilrkrow/ollama-mgr/internal/modelparse"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/origin"
+	"github.com/kilrkrow/ollama-mgr/internal/registry"
+	"github.com/kilrkrow/ollama-mgr/internal/upgrade"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +39,7 @@ func main() {
 		Long: `ollama-mgr is a thin Windows-friendly manager for Ollama models.
 
 It lists installed models, checks for same-tag weight updates and notional
-generation upgrades (e.g. qwen2.5-coder:32b → qwen3-coder:32b), and can
+generation upgrades (e.g. qwen2.5-coder:32b â†’ qwen3-coder:32b), and can
 delete, pull, open library pages, or run models.`,
 		SilenceUsage: true,
 	}
@@ -125,10 +125,10 @@ func cmdList() *cobra.Command {
 					org := f.Origin
 					flagLine := org.Flag + " " + org.Code
 					if org.Org != "" {
-						flagLine += " · " + org.Org
+						flagLine += " Â· " + org.Org
 					}
 					if org.Unknown {
-						flagLine = "🏳️ unknown"
+						flagLine = "ðŸ³ï¸ unknown"
 					}
 					fmt.Printf("%s  %s\n", f.Base, flagLine)
 					// features
@@ -203,7 +203,7 @@ func cmdList() *cobra.Command {
 			}
 			for _, m := range models {
 				p := modelparse.Parse(m.Name, m.ParameterSize)
-				r := row{Model: m, LibraryURL: p.LibraryURL(), Released: "—"}
+				r := row{Model: m, LibraryURL: p.LibraryURL(), Released: "â€”"}
 				if meta, ok := upstream[m.Name]; ok && !meta.UpdatedAt.IsZero() {
 					r.Released = meta.UpdatedAt.UTC().Format("2006-01-02")
 				}
@@ -239,10 +239,10 @@ func cmdList() *cobra.Command {
 					}
 				case "released":
 					ai, aj := rows[i].Released, rows[j].Released
-					if ai == "—" {
+					if ai == "â€”" {
 						ai = "9999-99-99"
 					}
-					if aj == "—" {
+					if aj == "â€”" {
 						aj = "9999-99-99"
 					}
 					switch {
@@ -456,7 +456,7 @@ func cmdUpgrade() *cobra.Command {
 			}
 			fmt.Println(res.Message)
 			if res.AlreadyHad && m == actions.ModeSwap {
-				fmt.Println("(target was already installed — pull was quick; delete only ran after verify)")
+				fmt.Println("(target was already installed â€” pull was quick; delete only ran after verify)")
 			}
 			return nil
 		},

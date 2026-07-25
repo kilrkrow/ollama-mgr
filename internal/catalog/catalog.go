@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/guysc/ollama-mgr/internal/modelparse"
+	"github.com/kilrkrow/ollama-mgr/internal/modelparse"
 )
 
 // Entry is a model discovered on ollama.com.
@@ -325,7 +325,7 @@ func CanonicalSizePills(tags []string) []string {
 			continue
 		}
 		// extract leading size from composite only if whole tag is size-like prefix
-		// e.g. 30b-a3b → treat as 30b for matrix? skip composites for homepage-style pills
+		// e.g. 30b-a3b â†’ treat as 30b for matrix? skip composites for homepage-style pills
 	}
 	return out
 }
@@ -436,12 +436,12 @@ func (c *Client) FindSuccessors(ctx context.Context, installed modelparse.Parsed
 			continue
 		}
 		if cand.Version.IsZero() || installed.Version.IsZero() {
-			// still allow if name clearly different and family matches — require newer version when both parse
+			// still allow if name clearly different and family matches â€” require newer version when both parse
 			if !installed.Version.IsZero() && cand.Version.IsZero() {
 				continue
 			}
 			if !cand.Version.IsZero() && installed.Version.IsZero() {
-				// candidate has version, installed doesn't — skip notional
+				// candidate has version, installed doesn't â€” skip notional
 				continue
 			}
 		} else if cand.Version.Compare(installed.Version) <= 0 {
@@ -589,7 +589,7 @@ func parseSearchHTML(html string) []Entry {
 			// size tokens often appear as "32b" badges near the card
 			for _, sm := range sizeBadgeRe.FindAllString(strings.ToLower(window), -1) {
 				n := normalizeSizeToken(sm)
-				// filter noise: years etc — require unit b or m and reasonable range
+				// filter noise: years etc â€” require unit b or m and reasonable range
 				if len(n) >= 2 && len(n) <= 6 {
 					dup := false
 					for _, s := range sizes {
@@ -639,7 +639,7 @@ func (c *Client) fetch(ctx context.Context, rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "ollama-mgr/0.1 (+https://github.com/guysc/ollama-mgr)")
+	req.Header.Set("User-Agent", "ollama-mgr/0.1 (+https://github.com/kilrkrow/ollama-mgr)")
 	req.Header.Set("Accept", "text/html")
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

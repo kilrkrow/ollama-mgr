@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
+      - name: Build CLI
+        run: go build -ldflags "-s -w -X github.com/kilrkrow/ollama-mgr/internal/config.Version=${{ github.sha }}" -o dist/ollama-mgr.exe ./cmd/ollama-mgr
+      - name: Build GUI
+        env:
+          CGO_ENABLED: "0"
+        run: go build -ldflags "-s -w -H=windowsgui -X github.com/kilrkrow/ollama-mgr/internal/config.Version=${{ github.sha }}" -o dist/ollama-mgr-gui.exe ./cmd/ollama-mgr-gui

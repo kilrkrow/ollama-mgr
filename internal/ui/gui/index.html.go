@@ -168,13 +168,13 @@ const indexHTML = `<!DOCTYPE html>
   <button id="btnAddFamily" title="Fetch a library family you don't have yet">+ Family</button>
   <button class="primary" id="btnRefresh">Refresh</button>
   <button id="btnCheck">Check updates</button>
-  <button id="btnUpgrade">Upgrade…</button>
+  <button id="btnUpgrade">Upgradeâ€¦</button>
   <button id="btnOpen">Open listing</button>
   <button id="btnRun" title="Open a console and chat with the selected model (ollama run). Select a row first.">Run model</button>
   <button class="danger" id="btnDelete">Delete</button>
   <button id="btnServe" title="Start the Ollama daemon if it is not running (ollama serve). Does not load a model.">Start server</button>
 </header>
-<div id="status">Loading…</div>
+<div id="status">Loadingâ€¦</div>
 <div id="addBar">
   <label for="addQuery" class="muted" style="margin:0">Library family:</label>
   <input type="text" id="addQuery" placeholder="e.g. mistral, qwen3-coder, gemma4" autocomplete="off" />
@@ -184,15 +184,15 @@ const indexHTML = `<!DOCTYPE html>
   <div id="addHits"></div>
 </div>
 <div class="legend" id="familyLegend">
-  Size pills: <strong style="color:#bbf7d0">solid</strong> = downloaded ·
-  <span style="border:1px dashed #64748b;border-radius:999px;padding:0 6px">outline</span> = available (click to pull) ·
-  indigo = features ·
-  <strong style="color:#e9d5ff">+ Family</strong> = fetch library line ·
+  Size pills: <strong style="color:#bbf7d0">solid</strong> = downloaded Â·
+  <span style="border:1px dashed #64748b;border-radius:999px;padding:0 6px">outline</span> = available (click to pull) Â·
+  indigo = features Â·
+  <strong style="color:#e9d5ff">+ Family</strong> = fetch library line Â·
   Select rows with click / Ctrl / Shift (no checkboxes)
 </div>
 <div id="selectionBar">
   <span id="selCount">0 selected</span>
-  <span class="muted" style="margin:0">Click = select · Ctrl+click = toggle · Shift+click = range · Esc = clear</span>
+  <span class="muted" style="margin:0">Click = select Â· Ctrl+click = toggle Â· Shift+click = range Â· Esc = clear</span>
   <button id="btnBatchCheck">Check selected</button>
   <button id="btnBatchOpen">Open listings</button>
   <button class="danger" id="btnBatchDelete">Delete selected</button>
@@ -204,7 +204,7 @@ const indexHTML = `<!DOCTYPE html>
       <thead>
         <tr>
           <th class="chk"><input type="checkbox" id="chkAllFamily" title="Select all families"/></th>
-          <th title="Curated country of origin (lab HQ) — not from Ollama API">Flag</th>
+          <th title="Curated country of origin (lab HQ) â€” not from Ollama API">Flag</th>
           <th>Family</th>
           <th>Features</th>
           <th>Sizes</th>
@@ -312,7 +312,7 @@ async function pollJobs() {
     if (jobs.length) {
       var j = jobs[0];
       var pct = (j.percent >= 0) ? (' ' + Math.round(j.percent) + '%') : '';
-      setStatus((j.done ? 'Job done: ' : 'Job: ') + (j.phase || '') + ' — ' + (j.message || '') + pct);
+      setStatus((j.done ? 'Job done: ' : 'Job: ') + (j.phase || '') + ' â€” ' + (j.message || '') + pct);
     }
     // When a job finishes, refresh real model list once
     if (prevActive > 0 && nowActive === 0) {
@@ -336,8 +336,8 @@ function parseParams(s) {
 }
 
 function cmpStr(a, b) {
-  a = (a == null || a === '—' || a === '') ? '' : String(a).toLowerCase();
-  b = (b == null || b === '—' || b === '') ? '' : String(b).toLowerCase();
+  a = (a == null || a === 'â€”' || a === '') ? '' : String(a).toLowerCase();
+  b = (b == null || b === 'â€”' || b === '') ? '' : String(b).toLowerCase();
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;
@@ -358,8 +358,8 @@ function sortModels() {
         break;
       case 'released':
         // ISO dates sort as strings; empty last when ascending
-        var ar = (!a.released || a.released === '—') ? (sortDir > 0 ? '9999' : '') : a.released;
-        var br = (!b.released || b.released === '—') ? (sortDir > 0 ? '9999' : '') : b.released;
+        var ar = (!a.released || a.released === 'â€”') ? (sortDir > 0 ? '9999' : '') : a.released;
+        var br = (!b.released || b.released === 'â€”') ? (sortDir > 0 ? '9999' : '') : b.released;
         r = cmpStr(ar, br);
         break;
       default:
@@ -376,7 +376,7 @@ function updateSortHeaders() {
     var ind = th.querySelector('.ind');
     if (key === sortKey) {
       th.classList.add('active');
-      ind.textContent = sortDir > 0 ? '▲' : '▼';
+      ind.textContent = sortDir > 0 ? 'â–²' : 'â–¼';
     } else {
       th.classList.remove('active');
       ind.textContent = '';
@@ -403,7 +403,7 @@ async function api(path, opts) {
 }
 
 function statusClass(st) {
-  if (!st || st === '—' || st === 'OK') return 'badge-ok';
+  if (!st || st === 'â€”' || st === 'OK') return 'badge-ok';
   if (st.indexOf('DELETE PENDING') === 0 || st.indexOf('DOWNLOAD') === 0) return 'badge-dl';
   if (st.indexOf('UPDATE') === 0 || st.indexOf('NOTIONAL') === 0) return 'badge-warn';
   if (st.indexOf('ERROR') === 0 || st.indexOf('DOWN') === 0 || st.indexOf('FAIL') === 0) return 'badge-bad';
@@ -432,12 +432,12 @@ function esc(s) {
   });
 }
 
-/** Build flag cell HTML from origin object (emoji + ISO code — always visible). */
+/** Build flag cell HTML from origin object (emoji + ISO code â€” always visible). */
 function flagChipHTML(og) {
   og = og || {};
-  var emoji = og.flag || '🏳️';
+  var emoji = og.flag || 'ðŸ³ï¸';
   var code = og.code || '?';
-  var title = (og.name || 'Unknown') + (og.org ? ' · ' + og.org : '') + ' (curated origin; not from Ollama API)';
+  var title = (og.name || 'Unknown') + (og.org ? ' Â· ' + og.org : '') + ' (curated origin; not from Ollama API)';
   return '<div class="flag-chip" title="' + esc(title) + '">' +
     '<span class="emoji">' + emoji + '</span>' +
     '<span class="code">' + esc(code) + '</span></div>';
@@ -445,9 +445,9 @@ function flagChipHTML(og) {
 
 function flagInlineHTML(og) {
   og = og || {};
-  var emoji = og.flag || '🏳️';
+  var emoji = og.flag || 'ðŸ³ï¸';
   var code = og.code || '';
-  var title = (og.name || 'Unknown') + (og.org ? ' · ' + og.org : '');
+  var title = (og.name || 'Unknown') + (og.org ? ' Â· ' + og.org : '');
   return '<span class="flag-inline" title="' + esc(title) + '">' + emoji +
     (code ? ' <span style="font-size:11px;color:var(--muted)">' + esc(code) + '</span>' : '') +
     '</span>';
@@ -537,14 +537,14 @@ function displayRows() {
   // Base installed models + synthetic download rows from jobs
   var rows = models.map(function(m) {
     var j = jobForFrom(m.name);
-    var st = (checkMap[m.name] && checkMap[m.name].status) || m.status || '—';
+    var st = (checkMap[m.name] && checkMap[m.name].status) || m.status || 'â€”';
     var pending = false;
     var pct = null;
     if (j && j.pending_delete) {
       pending = true;
-      st = 'DELETE PENDING → ' + (j.to || '?');
-      if (j.phase === 'deleting') st = 'REMOVING (swap complete pull)…';
-      if (j.phase === 'error') st = 'SWAP FAILED (kept) — ' + (j.error || j.message || '');
+      st = 'DELETE PENDING â†’ ' + (j.to || '?');
+      if (j.phase === 'deleting') st = 'REMOVING (swap complete pull)â€¦';
+      if (j.phase === 'error') st = 'SWAP FAILED (kept) â€” ' + (j.error || j.message || '');
     }
     return {
       kind: 'model',
@@ -573,18 +573,18 @@ function displayRows() {
     var st = 'DOWNLOADING ' + (j.to || '');
     if (j.percent >= 0) st += ' ' + Math.round(j.percent) + '%';
     if (j.phase === 'verifying') st = 'VERIFYING ' + j.to;
-    if (j.phase === 'deleting') st = 'INSTALLED — removing old…';
-    if (j.phase === 'error') st = 'DOWNLOAD/SWAP ERROR — ' + (j.error || j.message || '');
+    if (j.phase === 'deleting') st = 'INSTALLED â€” removing oldâ€¦';
+    if (j.phase === 'error') st = 'DOWNLOAD/SWAP ERROR â€” ' + (j.error || j.message || '');
     if (j.message && j.phase === 'pulling') st = j.message;
     rows.push({
       kind: 'job',
       name: j.to + (already ? ' (updating)' : ' (pulling)'),
-      size: '—',
+      size: 'â€”',
       size_bytes: -1,
       params: '',
       quant: '',
-      released: '—',
-      modified: '—',
+      released: 'â€”',
+      modified: 'â€”',
       library: '',
       status: st,
       pending_delete: false,
@@ -616,8 +616,8 @@ function render() {
       case 'size': r = (A.size_bytes || 0) - (B.size_bytes || 0); break;
       case 'params': r = parseParams(A.params) - parseParams(B.params); break;
       case 'released':
-        var ar = (!A.released || A.released === '—') ? (sortDir > 0 ? '9999' : '') : A.released;
-        var br = (!B.released || B.released === '—') ? (sortDir > 0 ? '9999' : '') : B.released;
+        var ar = (!A.released || A.released === 'â€”') ? (sortDir > 0 ? '9999' : '') : A.released;
+        var br = (!B.released || B.released === 'â€”') ? (sortDir > 0 ? '9999' : '') : B.released;
         r = cmpStr(ar, br); break;
       default: r = cmpStr(A.name, B.name);
     }
@@ -656,7 +656,7 @@ function render() {
       a.onclick = function(e) { e.stopPropagation(); };
       tdLib.appendChild(a);
     } else if (m.synthetic && m.job && m.job.to) {
-      tdLib.textContent = 'pull → ' + m.job.to;
+      tdLib.textContent = 'pull â†’ ' + m.job.to;
     }
 
     var tdFlag = document.createElement('td');
@@ -675,8 +675,8 @@ function render() {
     tr.appendChild(tdText(m.size));
     tr.appendChild(tdText(m.params || ''));
     tr.appendChild(tdText(m.quant || ''));
-    tr.appendChild(tdText(m.released || '—'));
-    tr.appendChild(tdText(m.modified || '—'));
+    tr.appendChild(tdText(m.released || 'â€”'));
+    tr.appendChild(tdText(m.modified || 'â€”'));
     tr.appendChild(tdStatus);
     tr.appendChild(tdLib);
     tbody.appendChild(tr);
@@ -734,7 +734,7 @@ function renderFamily() {
       badge.style.marginLeft = '8px';
       title.appendChild(badge);
       var rm = document.createElement('button');
-      rm.textContent = '×';
+      rm.textContent = 'Ã—';
       rm.title = 'Remove from board';
       rm.style.marginLeft = '6px';
       rm.style.padding = '0 8px';
@@ -749,7 +749,7 @@ function renderFamily() {
     if (f.on_disk) {
       meta.textContent = (f.tag_count || 0) + ' installed tag(s)';
     } else {
-      meta.textContent = 'not on disk — click a size pill to pull';
+      meta.textContent = 'not on disk â€” click a size pill to pull';
     }
     tdName.appendChild(title);
     tdName.appendChild(meta);
@@ -758,7 +758,7 @@ function renderFamily() {
       exp.className = 'expand-tags';
       (f.installed || []).forEach(function(t) {
         var row = document.createElement('div');
-        row.textContent = t.name + ' · ' + t.size_human + ' · ' + (t.quant || '');
+        row.textContent = t.name + ' Â· ' + t.size_human + ' Â· ' + (t.quant || '');
         if (selectedSet[t.name]) row.style.color = '#93c5fd';
         row.onclick = function(e) {
           e.stopPropagation();
@@ -783,7 +783,7 @@ function renderFamily() {
     if (!feats.childNodes.length) {
       var none = document.createElement('span');
       none.className = 'muted';
-      none.textContent = '—';
+      none.textContent = 'â€”';
       feats.appendChild(none);
     }
     tdFeat.appendChild(feats);
@@ -802,17 +802,17 @@ function renderFamily() {
         p.appendChild(sub);
       }
       if (sp.installed) {
-        p.title = 'Installed: ' + (sp.local_tags || []).join(', ') + ' — click to select for Run model';
+        p.title = 'Installed: ' + (sp.local_tags || []).join(', ') + ' â€” click to select for Run model';
         p.onclick = function(e) {
           e.stopPropagation();
           if (sp.local_tags && sp.local_tags.length) {
             handleRowSelect(e, sp.local_tags[0], familyTagOrder);
             if (sp.local_tags.length > 1) expandedFamily[f.base] = true;
-            setStatus('Selected ' + selected + ' — Run model opens a chat console');
+            setStatus('Selected ' + selected + ' â€” Run model opens a chat console');
           }
         };
       } else {
-        p.title = 'Not downloaded — click to pull ' + sp.pull_tag;
+        p.title = 'Not downloaded â€” click to pull ' + sp.pull_tag;
         p.onclick = function(e) {
           e.stopPropagation();
           pullSize(sp.pull_tag);
@@ -823,13 +823,13 @@ function renderFamily() {
     if (!sizes.childNodes.length) {
       var dash = document.createElement('span');
       dash.className = 'muted';
-      dash.textContent = '—';
+      dash.textContent = 'â€”';
       sizes.appendChild(dash);
     }
     tdSizes.appendChild(sizes);
 
     var tdDisk = document.createElement('td');
-    tdDisk.textContent = f.disk_human || '—';
+    tdDisk.textContent = f.disk_human || 'â€”';
     var tdTags = document.createElement('td');
     var btn = document.createElement('button');
     btn.textContent = expandedFamily[f.base] ? 'Hide tags' : 'Show tags';
@@ -866,7 +866,7 @@ function renderFamily() {
 async function pullSize(pullTag) {
   if (!pullTag) return;
   if (!confirm('Pull ' + pullTag + '?\n\nThis may be a large download.')) return;
-  setStatus('Starting pull ' + pullTag + '…');
+  setStatus('Starting pull ' + pullTag + 'â€¦');
   try {
     var res = await api('/api/upgrade', {
       method: 'POST',
@@ -885,7 +885,7 @@ async function pullSize(pullTag) {
 }
 
 async function refresh(keepJobStatus) {
-  if (!keepJobStatus) setStatus('Loading models + family pills…');
+  if (!keepJobStatus) setStatus('Loading models + family pillsâ€¦');
   try {
     const st = await api('/api/status');
     const data = await api('/api/list');
@@ -913,7 +913,7 @@ async function refresh(keepJobStatus) {
 
 async function checkNames(names) {
   var label = names && names.length ? ('selected (' + names.length + ')') : 'all';
-  setStatus('Checking updates for ' + label + '…');
+  setStatus('Checking updates for ' + label + 'â€¦');
   try {
     var opts = undefined;
     if (names && names.length) {
@@ -932,7 +932,7 @@ async function checkNames(names) {
       return copy;
     });
     render();
-    setStatus('Check complete — ' + data.attention + ' need attention');
+    setStatus('Check complete â€” ' + data.attention + ' need attention');
   } catch (e) {
     setStatus('Check failed: ' + e.message);
   }
@@ -949,9 +949,9 @@ function requireRunnableModel() {
   }
   alert(
     'Select an installed model first:\n\n' +
-    '• Tag view: click a row\n' +
-    '• Family view: click a solid (green) size pill, or Show tags → click a tag\n' +
-    '• Ctrl+click / Shift+click for multi-select (batch delete/check only)'
+    'â€¢ Tag view: click a row\n' +
+    'â€¢ Family view: click a solid (green) size pill, or Show tags â†’ click a tag\n' +
+    'â€¢ Ctrl+click / Shift+click for multi-select (batch delete/check only)'
   );
   return null;
 }
@@ -1040,7 +1040,7 @@ async function runLibrarySearch() {
 async function fetchFamily(name) {
   if (!name) name = lastExact || addQuery.value.trim();
   if (!name) { alert('Enter a library model name'); return; }
-  setStatus('Fetching family ' + name + '…');
+  setStatus('Fetching family ' + name + 'â€¦');
   try {
     var res = await api('/api/families/fetch', {
       method: 'POST',
@@ -1051,7 +1051,7 @@ async function fetchFamily(name) {
     await refresh();
     expandedFamily[res.added || name] = true;
     renderFamily();
-    setStatus('Fetched ' + (res.added || name) + (res.already_on_disk ? ' (already on disk)' : ' — sizes outlined; click to pull'));
+    setStatus('Fetched ' + (res.added || name) + (res.already_on_disk ? ' (already on disk)' : ' â€” sizes outlined; click to pull'));
   } catch (e) {
     alert(e.message);
     setStatus(e.message);
@@ -1123,7 +1123,7 @@ document.getElementById('btnBatchOpen').onclick = async function() {
 };
 document.getElementById('btnRun').onclick = async function() {
   var n = requireRunnableModel(); if (!n) return;
-  setStatus('Opening console: ollama run ' + n + '…');
+  setStatus('Opening console: ollama run ' + n + 'â€¦');
   try {
     await api('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:n})});
     setStatus('Opened new console for ' + n + ' (chat there; this window stays open)');
@@ -1132,7 +1132,7 @@ document.getElementById('btnRun').onclick = async function() {
 async function deleteNames(names) {
   if (!names.length) return;
   if (!confirm('Permanently delete ' + names.length + ' model(s)?\n\n' + names.join('\n'))) return;
-  setStatus('Deleting ' + names.length + ' model(s)…');
+  setStatus('Deleting ' + names.length + ' model(s)â€¦');
   try {
     var res = await api('/api/delete', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1152,7 +1152,7 @@ document.getElementById('btnBatchDelete').onclick = function() {
   deleteNames(selectedNames());
 };
 document.getElementById('btnServe').onclick = async function() {
-  setStatus('Checking / starting Ollama server…');
+  setStatus('Checking / starting Ollama serverâ€¦');
   try {
     var j = await api('/api/serve', {method:'POST'});
     var msg = j.message || '';
@@ -1187,7 +1187,7 @@ document.getElementById('btnDoUpgrade').onclick = async function() {
     if (!confirm(msg)) return;
   }
   document.getElementById('upgradeDlg').close();
-  setStatus('Starting ' + mode + '…');
+  setStatus('Starting ' + mode + 'â€¦');
   try {
     var res = await api('/api/upgrade', {
       method:'POST', headers:{'Content-Type':'application/json'},

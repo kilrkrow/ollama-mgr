@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/guysc/ollama-mgr/internal/catalog"
-	"github.com/guysc/ollama-mgr/internal/modelparse"
-	"github.com/guysc/ollama-mgr/internal/ollama"
-	"github.com/guysc/ollama-mgr/internal/origin"
+	"github.com/kilrkrow/ollama-mgr/internal/catalog"
+	"github.com/kilrkrow/ollama-mgr/internal/modelparse"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/origin"
 )
 
 // SizePill is a parameter-size chip (installed or available).
@@ -108,7 +108,7 @@ func GroupWithFetched(ctx context.Context, models []ollama.Model, fetchedBases [
 			b = b[:i]
 		}
 		if strings.Contains(b, "/") {
-			// user/model — keep as-is for now
+			// user/model â€” keep as-is for now
 		}
 		fetchedSet[b] = true
 		if !localSet[b] {
@@ -189,7 +189,7 @@ func FetchLibraryFamily(ctx context.Context, base string, enrich Enricher) (Fami
 		pills = p
 	}
 	if len(pills.Sizes) == 0 && len(pills.Features) == 0 && pills.Name == "" {
-		// still allow empty-ish if page had no pills — but require enrich success with name
+		// still allow empty-ish if page had no pills â€” but require enrich success with name
 		pills.Name = base
 	}
 	f := buildFamily(base, nil, pills)

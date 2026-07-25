@@ -1,5 +1,5 @@
 // Package origin maps known Ollama model lines to an approximate country of origin
-// (lab / company HQ). This is curated metadata — not provided by the Ollama API.
+// (lab / company HQ). This is curated metadata â€” not provided by the Ollama API.
 package origin
 
 import (
@@ -44,7 +44,7 @@ func Lookup(base string) Info {
 }
 
 func unknown() Info {
-	return Info{Code: "", Name: "Unknown", Flag: "🏳️", Org: "", Unknown: true}
+	return Info{Code: "", Name: "Unknown", Flag: "ðŸ³ï¸", Org: "", Unknown: true}
 }
 
 func us(org string) Info { return Info{Code: "US", Name: "United States", Flag: flag("US"), Org: org} }
@@ -62,12 +62,12 @@ func gb(org string) Info { return Info{Code: "GB", Name: "United Kingdom", Flag:
 func flag(code string) string {
 	code = strings.ToUpper(code)
 	if len(code) != 2 {
-		return "🏳️"
+		return "ðŸ³ï¸"
 	}
 	r1 := rune(code[0]) - 'A' + 0x1F1E6
 	r2 := rune(code[1]) - 'A' + 0x1F1E6
 	if r1 < 0x1F1E6 || r2 < 0x1F1E6 {
-		return "🏳️"
+		return "ðŸ³ï¸"
 	}
 	return string([]rune{r1, r2})
 }
@@ -89,7 +89,7 @@ var exact = map[string]Info{
 	"yi": cn("01.AI"), "glm4": cn("Zhipu"), "glm-4": cn("Zhipu"),
 	"internlm": cn("Shanghai AI Lab"), "internlm2": cn("Shanghai AI Lab"),
 	"nomic-embed-text": us("Nomic"), "nomic-embed-text-v2-moe": us("Nomic"),
-	"llava": us("community / UW–Madison et al."), "moondream": us("Vikhyat"),
+	"llava": us("community / UWâ€“Madison et al."), "moondream": us("Vikhyat"),
 	"tinyllama": us("community"), "orca-mini": us("community"),
 	"falcon": ae("TII"), "jais": ae("G42 / Core42"),
 	"stablelm": gb("Stability AI"), "stable-code": gb("Stability AI"),

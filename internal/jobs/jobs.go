@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/guysc/ollama-mgr/internal/actions"
-	"github.com/guysc/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/actions"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
 )
 
 // Job is an in-flight or recently finished upgrade/pull operation.
@@ -98,13 +98,13 @@ func (m *Manager) StartUpgrade(client *ollama.Client, req actions.UpgradeRequest
 	case actions.ModeSwap:
 		j.PendingDelete = true
 		j.ShowDownload = true
-		j.Message = "swap staged — will pull " + req.To + " then remove " + req.From
+		j.Message = "swap staged â€” will pull " + req.To + " then remove " + req.From
 	case actions.ModeSideBySide, actions.ModePull:
 		j.ShowDownload = true
 		if req.To == "" {
 			j.To = req.From
 		}
-		j.Message = "pull staged — " + j.To
+		j.Message = "pull staged â€” " + j.To
 	case actions.ModeSkip:
 		j.Phase = actions.PhaseSkipped
 		j.Message = "skipped"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/guysc/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
 )
 
 // Mode is how to apply an upgrade.
@@ -46,7 +46,7 @@ type Event struct {
 	To       string             `json:"to,omitempty"`
 	Mode     Mode               `json:"mode,omitempty"`
 	Pull     *ollama.PullProgress `json:"pull,omitempty"`
-	// Percent is 0–100 when known from pull totals; -1 if unknown.
+	// Percent is 0â€“100 when known from pull totals; -1 if unknown.
 	Percent float64 `json:"percent"`
 }
 
@@ -104,7 +104,7 @@ func ApplyUpgrade(ctx context.Context, client *ollama.Client, req UpgradeRequest
 
 		emit(Event{
 			Phase:   PhasePulling,
-			Message: fmt.Sprintf("pulling %s…", target),
+			Message: fmt.Sprintf("pulling %sâ€¦", target),
 			To:      target,
 			Percent: 0,
 		})
@@ -149,7 +149,7 @@ func ApplyUpgrade(ctx context.Context, client *ollama.Client, req UpgradeRequest
 		if req.Mode == ModeSwap {
 			emit(Event{
 				Phase:   PhaseDeleting,
-				Message: fmt.Sprintf("download OK — removing %s…", req.From),
+				Message: fmt.Sprintf("download OK â€” removing %sâ€¦", req.From),
 				From:    req.From,
 				To:      target,
 				Percent: 100,
@@ -230,5 +230,5 @@ func pullStatusText(p ollama.PullProgress) string {
 	if p.Status != "" {
 		return p.Status
 	}
-	return "pulling…"
+	return "pullingâ€¦"
 }

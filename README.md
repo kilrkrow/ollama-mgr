@@ -4,19 +4,37 @@ Thin Windows manager for **local Ollama models**: list, check for updates (same-
 
 Ollama does not really “manage” what you have downloaded. This fills that gap.
 
+**Repo:** https://github.com/kilrkrow/ollama-mgr
+
 ## Features
 
 | Capability | Description |
 |------------|-------------|
 | **List** | Installed models with size, params, quant, **Released** (upstream library Updated), Downloaded (local), library URL |
-| **Family view** | Group by base model with **feature pills** (tools/vision/…) and **size pills** (solid = downloaded, outline = available → click to pull) |
-| **Batch (GUI)** | Checkboxes + select-all for batch check / open / delete |
+| **Family view** | Group by base model with **feature pills** and **size pills** (solid = on disk, outline = available → click to pull) |
+| **+ Family** | Search the library and fetch a line you don’t have yet (features + outline sizes; nothing downloads until you click a pill). Board persists under `%APPDATA%\ollama-mgr\` |
+| **Flags** | Curated country-of-origin chips (lab HQ). **Not** from the Ollama API — see `internal/origin` |
+| **Selection** | Click row = select · Ctrl+click = toggle · Shift+click = range · Esc = clear (no always-on checkboxes) |
 | **Digest updates** | Compare local weight digests to `registry.ollama.ai` without pulling |
 | **Notional upgrades** | e.g. `qwen2.5-coder:32b` → `qwen3-coder:30b` (same weight class + specialty, newer series) |
-| **Upgrade modes** | Skip · side-by-side · **staged swap** (tag old as DELETE PENDING, show pull progress row, verify, only then delete) |
-| **Delete / pull / run** | Thin wrappers over the Ollama API + CLI |
-| **Open listing** | Browser link to `https://ollama.com/library/...` |
+| **Upgrade modes** | Skip · side-by-side · **staged swap** (DELETE PENDING → pull/verify → only then remove old) |
+| **Run model** | Opens a new console (`ollama run <tag>`). Needs exactly one selected installed model |
+| **Start server** | Starts the Ollama daemon if down (`ollama serve`). No model required |
 | **CLI + GUI** | Shared core; two Windows executables |
+
+### Feature chips (legend)
+
+| Style | Meaning |
+|--------|---------|
+| Solid indigo | Reported on **your installed** tag(s) |
+| Dashed / muted | Advertised on the **library** page for the family, not confirmed on local tags |
+
+### Size pills (legend)
+
+| Style | Meaning |
+|--------|---------|
+| Solid green | That size class is **downloaded** |
+| Dashed outline | On the library, **not** local — click to pull |
 
 ## Build (Windows)
 
@@ -30,7 +48,11 @@ go mod tidy
 Produces:
 
 - `dist/ollama-mgr.exe` — CLI
-- `dist/ollama-mgr-gui.exe` — WebView2 GUI (no console window; needs WebView2 Runtime, preinstalled on modern Windows 11)
+- `dist/ollama-mgr-gui.exe` — WebView2 GUI (no console flash; needs WebView2 Runtime, preinstalled on modern Windows 11)
+
+```powershell
+go install github.com/kilrkrow/ollama-mgr/cmd/ollama-mgr@latest
+```
 
 ## CLI
 
@@ -51,6 +73,7 @@ ollama-mgr open qwen2.5-coder:32b
 ollama-mgr run llama3.1:8b
 ollama-mgr status
 ollama-mgr serve
+ollama-mgr version
 ollama-mgr --endpoint http://gpu-box:11434 list
 ```
 
@@ -60,10 +83,16 @@ Environment:
 |----------|---------|
 | `OLLAMA_HOST` | Ollama API host (default `http://localhost:11434`) |
 | `OLLAMA_MGR_CACHE_TTL_HOURS` | Catalog cache TTL (default 24) |
+| `OLLAMA_MGR_CONFIG_DIR` | Override config dir (default `%APPDATA%\ollama-mgr`) |
 
 ## GUI
 
-Double-click `ollama-mgr-gui.exe`, or run it from a terminal. Use the toolbar to refresh, check updates, upgrade (skip / side-by-side / swap), open the library page, run, or delete.
+Double-click `ollama-mgr-gui.exe`, or run it from a terminal.
+
+- **Family \| Tag** — grouped catalog vs one row per installed tag  
+- **+ Family** — fetch a library line (e.g. type `mistral`)  
+- Select a model (row or solid size pill) → **Run model**  
+- **Start server** only if the daemon is down  
 
 ## How notional upgrades work
 
@@ -87,16 +116,18 @@ internal/ollama/      Local Ollama HTTP API
 internal/registry/    registry.ollama.ai manifests
 internal/catalog/     ollama.com search/tags (cached)
 internal/modelparse/  Name → family/version/specialty/size
+internal/family/      Group local + fetched families, pills
+internal/origin/      Curated country-of-origin map
 internal/upgrade/     Digest + notional engine
 internal/actions/     skip / side-by-side / swap / pull
+internal/jobs/        Async upgrade jobs for GUI
 internal/ui/gui/      WebView2 + embedded HTML UI
 ```
 
-## GUI notes
+## Screenshots
 
-The GUI binary embeds a small local HTTP API and hosts a WebView2 window (falls back to your default browser if WebView2 is unavailable). No C compiler / CGO required to build.
-
+_TODO: add screenshots from a real install (Family + flags, Tag view, + Family, staged job)._
 
 ## License
 
-MIT (or as you prefer — add a LICENSE when publishing).
+MIT — see [LICENSE](LICENSE).

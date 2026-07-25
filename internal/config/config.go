@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -11,8 +13,10 @@ import (
 const (
 	DefaultEndpoint = "http://localhost:11434"
 	AppName         = "ollama-mgr"
-	Version         = "0.1.0"
 )
+
+// Version is set at link time via -ldflags "-X .../config.Version=...".
+var Version = "0.1.0"
 
 // Config holds runtime settings for CLI and GUI.
 type Config struct {
@@ -95,4 +99,60 @@ func (c Config) IsPinned(name string) bool {
 		base = name[:i]
 	}
 	return c.Pinned[base]
+}
+
+// FetchedPath is the on-disk list of library families added via "+ Family".
+func (c Config) FetchedPath() string {
+	return filepath.Join(c.ConfigDir, "fetched.json")
+}
+
+type fetchedFile struct {
+	Bases []string `json:"bases"`
+}
+
+// LoadFetchedBases returns persisted empty-family board names.
+func (c Config) LoadFetchedBases() []string {
+	b, err := os.ReadFile(c.FetchedPath())
+	if err != nil {
+		return nil
+	}
+	var f fetchedFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(f.Bases))
+	seen := map[string]bool{}
+	for _, name := range f.Bases {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// SaveFetchedBases writes the fetched-family board (sorted unique).
+func (c Config) SaveFetchedBases(bases []string) error {
+	if err := c.EnsureDirs(); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	var clean []string
+	for _, name := range bases {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		clean = append(clean, name)
+	}
+	sort.Strings(clean)
+	b, err := json.MarshalIndent(fetchedFile{Bases: clean}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(c.FetchedPath(), b, 0o644)
 }

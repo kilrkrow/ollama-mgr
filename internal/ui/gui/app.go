@@ -13,27 +13,31 @@ import (
 	"sync"
 	"time"
 
-	"github.com/guysc/ollama-mgr/internal/actions"
-	"github.com/guysc/ollama-mgr/internal/catalog"
-	"github.com/guysc/ollama-mgr/internal/config"
-	"github.com/guysc/ollama-mgr/internal/family"
-	"github.com/guysc/ollama-mgr/internal/jobs"
-	"github.com/guysc/ollama-mgr/internal/modelparse"
-	"github.com/guysc/ollama-mgr/internal/ollama"
-	"github.com/guysc/ollama-mgr/internal/origin"
-	"github.com/guysc/ollama-mgr/internal/registry"
-	"github.com/guysc/ollama-mgr/internal/upgrade"
+	"github.com/kilrkrow/ollama-mgr/internal/actions"
+	"github.com/kilrkrow/ollama-mgr/internal/catalog"
+	"github.com/kilrkrow/ollama-mgr/internal/config"
+	"github.com/kilrkrow/ollama-mgr/internal/family"
+	"github.com/kilrkrow/ollama-mgr/internal/jobs"
+	"github.com/kilrkrow/ollama-mgr/internal/modelparse"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/origin"
+	"github.com/kilrkrow/ollama-mgr/internal/registry"
+	"github.com/kilrkrow/ollama-mgr/internal/upgrade"
 	"github.com/jchv/go-webview2"
 )
 
 // Run starts a local API server and opens a WebView2 window (falls back to browser).
 func Run(cfg config.Config) {
 	_ = cfg.EnsureDirs()
+	fetched := map[string]bool{}
+	for _, b := range cfg.LoadFetchedBases() {
+		fetched[b] = true
+	}
 	srv := &server{
 		cfg:          cfg,
 		client:       ollama.New(cfg.Endpoint),
 		jobs:         jobs.NewManager(),
-		fetchedBases: map[string]bool{},
+		fetchedBases: fetched,
 	}
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -135,7 +139,7 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	for _, m := range models {
 		p := modelparse.Parse(m.Name, m.ParameterSize)
-		released := "—"
+		released := "â€”"
 		if meta, ok := upstream[m.Name]; ok && !meta.UpdatedAt.IsZero() {
 			released = meta.UpdatedAt.UTC().Format("2006-01-02")
 		}
@@ -149,7 +153,7 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 			Released:  released,
 			Modified:  m.ModifiedAt.Local().Format("2006-01-02"),
 			Library:   p.LibraryURL(),
-			Status:    "—",
+			Status:    "â€”",
 			Origin:    oi,
 			Flag:      oi.Flag,
 		})
@@ -199,13 +203,29 @@ func (s *server) listFetched() []string {
 	return out
 }
 
+func (s *server) persistFetchedLocked() {
+	// caller holds s.mu
+	bases := make([]string, 0, len(s.fetchedBases))
+	for b := range s.fetchedBases {
+		bases = append(bases, b)
+	}
+	_ = s.cfg.SaveFetchedBases(bases)
+}
+
 func (s *server) pruneFetchedOnDisk(fams []family.Family) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	changed := false
 	for _, f := range fams {
 		if f.OnDisk {
-			delete(s.fetchedBases, f.Base)
+			if _, ok := s.fetchedBases[f.Base]; ok {
+				delete(s.fetchedBases, f.Base)
+				changed = true
+			}
 		}
+	}
+	if changed {
+		s.persistFetchedLocked()
 	}
 }
 
@@ -305,6 +325,7 @@ func (s *server) handleFamilyFetch(w http.ResponseWriter, r *http.Request) {
 			resolved = f.Base
 			s.mu.Lock()
 			s.fetchedBases[resolved] = true
+			s.persistFetchedLocked()
 			s.mu.Unlock()
 			writeJSON(w, map[string]any{"family": f, "added": resolved})
 			return
@@ -322,6 +343,7 @@ func (s *server) handleFamilyFetch(w http.ResponseWriter, r *http.Request) {
 				// merge via GroupWithFetched
 				s.mu.Lock()
 				s.fetchedBases[resolved] = true
+				s.persistFetchedLocked()
 				s.mu.Unlock()
 				fams := family.GroupWithFetched(ctx, models, s.listFetched(), enrich)
 				for _, fam := range fams {
@@ -334,6 +356,7 @@ func (s *server) handleFamilyFetch(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Lock()
 		s.fetchedBases[resolved] = true
+		s.persistFetchedLocked()
 		s.mu.Unlock()
 		writeJSON(w, map[string]any{"family": f, "added": resolved})
 
@@ -345,6 +368,7 @@ func (s *server) handleFamilyFetch(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Lock()
 		delete(s.fetchedBases, name)
+		s.persistFetchedLocked()
 		s.mu.Unlock()
 		writeJSON(w, map[string]any{"removed": name})
 
@@ -425,7 +449,7 @@ func (s *server) handleCheck(w http.ResponseWriter, r *http.Request) {
 			attention++
 		case upgrade.KindNotional:
 			if len(res.Candidates) > 0 {
-				st = "NOTIONAL → " + res.Candidates[0].FullName
+				st = "NOTIONAL â†’ " + res.Candidates[0].FullName
 			} else {
 				st = "NOTIONAL"
 			}
@@ -516,7 +540,7 @@ func (s *server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"job_id":  id,
 		"job":     job,
-		"message": "upgrade started — watch job status (swap deletes only after verify)",
+		"message": "upgrade started â€” watch job status (swap deletes only after verify)",
 	})
 }
 
@@ -570,7 +594,7 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 	// Launch interactive chat in a *new* console window.
 	//
 	// Windows START treats the first *quoted* token as the window title.
-	// Wrong:  start "ollama run mistral:7b"   → tries to execute that string as a program
+	// Wrong:  start "ollama run mistral:7b"   â†’ tries to execute that string as a program
 	//          (Go re-quotes a single /C string and breaks nested quotes)
 	// Right:  start "" cmd.exe /K ollama run mistral:7b
 	//          empty title "", then real executable cmd.exe

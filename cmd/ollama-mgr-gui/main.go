@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/guysc/ollama-mgr/internal/config"
-	"github.com/guysc/ollama-mgr/internal/ui/gui"
+	"github.com/kilrkrow/ollama-mgr/internal/config"
+	"github.com/kilrkrow/ollama-mgr/internal/ui/gui"
 )
 
 func main() {

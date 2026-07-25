@@ -1,4 +1,4 @@
-module github.com/guysc/ollama-mgr
+module github.com/kilrkrow/ollama-mgr
 
 go 1.26.3
 

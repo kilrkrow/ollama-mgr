@@ -40,7 +40,7 @@ func Parse(full string, parameterSize string) Parsed {
 
 	namePart := full
 	if i := strings.LastIndex(full, ":"); i >= 0 {
-		// avoid treating host:port as tag — only split if looks like model:tag
+		// avoid treating host:port as tag â€” only split if looks like model:tag
 		maybeTag := full[i+1:]
 		if !strings.Contains(maybeTag, "/") && maybeTag != "" {
 			namePart = full[:i]
@@ -218,14 +218,14 @@ func sizeFromString(s string) string {
 	if s == "" || strings.EqualFold(s, "latest") {
 		return ""
 	}
-	// strip quant suffixes for matching: 32b-instruct-q4_K_M → 32b
+	// strip quant suffixes for matching: 32b-instruct-q4_K_M â†’ 32b
 	m := sizeRe.FindStringSubmatch(strings.ToLower(s))
 	if m == nil {
 		return ""
 	}
 	num := m[1]
 	unit := m[2]
-	// normalize 32.0 → 32
+	// normalize 32.0 â†’ 32
 	if strings.Contains(num, ".") {
 		if f, err := strconv.ParseFloat(num, 64); err == nil {
 			if f == float64(int(f)) {
@@ -237,8 +237,8 @@ func sizeFromString(s string) string {
 }
 
 // SizeCompatible reports exact match or same weight class.
-// For large models (≥7B), allows ~15% relative difference (min ±2B) so
-// e.g. 32b ≈ 30b counts as a notional same-weight upgrade.
+// For large models (â‰¥7B), allows ~15% relative difference (min Â±2B) so
+// e.g. 32b â‰ˆ 30b counts as a notional same-weight upgrade.
 func SizeCompatible(a, b string) bool {
 	if a == "" || b == "" {
 		return false
@@ -255,7 +255,7 @@ func SizeCompatible(a, b string) bool {
 	if diff < 0 {
 		diff = -diff
 	}
-	// tiny models: exact or ±0.5
+	// tiny models: exact or Â±0.5
 	if na < 7 || nb < 7 {
 		return diff <= 0.5
 	}

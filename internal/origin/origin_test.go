@@ -19,7 +19,7 @@ func TestLookupKnown(t *testing.T) {
 		if info.Unknown || info.Code != code {
 			t.Fatalf("%s: got %+v want %s", base, info, code)
 		}
-		if info.Flag == "" || info.Flag == "🏳️" {
+		if info.Flag == "" || info.Flag == "ðŸ³ï¸" {
 			t.Fatalf("%s: missing flag emoji", base)
 		}
 	}

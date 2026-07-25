@@ -327,7 +327,7 @@ func FormatSize(n int64) string {
 func truncate(b []byte, n int) string {
 	s := string(b)
 	if len(s) > n {
-		return s[:n] + "…"
+		return s[:n] + "â€¦"
 	}
 	return s
 }

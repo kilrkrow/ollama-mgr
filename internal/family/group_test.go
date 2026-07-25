@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guysc/ollama-mgr/internal/catalog"
-	"github.com/guysc/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/catalog"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
 )
 
 type fakeEnrich struct {
@@ -24,7 +24,7 @@ func TestFetchLibraryFamilyEmptySizesOutline(t *testing.T) {
 	enrich := fakeEnrich{pills: map[string]catalog.FamilyPills{
 		"mistral": {Name: "mistral", Features: []string{"tools"}, Sizes: []string{"7b", "small"}},
 	}}
-	// CanonicalSizePills may drop "small" — use pure sizes
+	// CanonicalSizePills may drop "small" â€” use pure sizes
 	enrich.pills["mistral"] = catalog.FamilyPills{Name: "mistral", Features: []string{"tools"}, Sizes: []string{"7b", "22b"}}
 	f, err := FetchLibraryFamily(context.Background(), "mistral", enrich)
 	if err != nil {

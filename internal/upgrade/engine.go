@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/guysc/ollama-mgr/internal/catalog"
-	"github.com/guysc/ollama-mgr/internal/modelparse"
-	"github.com/guysc/ollama-mgr/internal/ollama"
-	"github.com/guysc/ollama-mgr/internal/registry"
+	"github.com/kilrkrow/ollama-mgr/internal/catalog"
+	"github.com/kilrkrow/ollama-mgr/internal/modelparse"
+	"github.com/kilrkrow/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/registry"
 )
 
 // Kind classifies an update finding.
