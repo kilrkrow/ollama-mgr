@@ -82,7 +82,7 @@ Environment:
 
 | Variable | Meaning |
 |----------|---------|
-| `OLLAMA_HOST` | Ollama API host (default `http://localhost:11434`) |
+| `OLLAMA_HOST` | Ollama API host (default `http://localhost:11434`). If set to `0.0.0.0:…` (bind address), ollama-mgr rewrites it to `127.0.0.1` for client connections |
 | `OLLAMA_MGR_CACHE_TTL_HOURS` | Catalog cache TTL (default 24) |
 | `OLLAMA_MGR_CONFIG_DIR` | Override config dir (default `%APPDATA%\ollama-mgr`) |
 

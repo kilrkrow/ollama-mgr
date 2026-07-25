@@ -33,11 +33,7 @@ func Default() Config {
 	if endpoint == "" {
 		endpoint = DefaultEndpoint
 	}
-	// OLLAMA_HOST may be host:port without scheme
-	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-		endpoint = "http://" + endpoint
-	}
-	endpoint = strings.TrimRight(endpoint, "/")
+	endpoint = normalizeEndpoint(endpoint)
 
 	cacheTTL := 24 * time.Hour
 	if v := os.Getenv("OLLAMA_MGR_CACHE_TTL_HOURS"); v != "" {
@@ -56,6 +52,38 @@ func Default() Config {
 		CacheDir:  cacheDir,
 		ConfigDir: configDir,
 	}
+}
+
+// normalizeEndpoint turns OLLAMA_HOST into a client URL.
+// Ollama often sets OLLAMA_HOST=0.0.0.0:11434 for *binding*; clients must not dial 0.0.0.0.
+func normalizeEndpoint(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return DefaultEndpoint
+	}
+	// host:port without scheme
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "http://" + endpoint
+	}
+	endpoint = strings.TrimRight(endpoint, "/")
+
+	// Rewrite unspecified bind addresses to loopback for outbound HTTP.
+	// e.g. http://0.0.0.0:11434 -> http://127.0.0.1:11434
+	//      http://[::]:11434     -> http://127.0.0.1:11434
+	replacements := []struct{ old, neu string }{
+		{"http://0.0.0.0", "http://127.0.0.1"},
+		{"https://0.0.0.0", "https://127.0.0.1"},
+		{"http://[::]", "http://127.0.0.1"},
+		{"https://[::]", "https://127.0.0.1"},
+		{"http://::", "http://127.0.0.1"}, // rare unbracketed form
+	}
+	for _, r := range replacements {
+		if strings.HasPrefix(endpoint, r.old) {
+			endpoint = r.neu + strings.TrimPrefix(endpoint, r.old)
+			break
+		}
+	}
+	return endpoint
 }
 
 func configDirPath() string {

@@ -651,6 +651,14 @@ async function refresh(keepJobStatus) {
   if (!keepJobStatus) setStatus('Loading models...');
   try {
     const st = await api('/api/status');
+    if (!st.up) {
+      models = [];
+      families = [];
+      render();
+      setStatus((st.endpoint || '') + ' | DOWN - ' + (st.message || 'Ollama not reachable') +
+        ' | Start server or fix OLLAMA_HOST (0.0.0.0 is rewritten to 127.0.0.1)');
+      return;
+    }
     const data = await api('/api/list');
     const famData = await api('/api/families');
     const jobData = await api('/api/jobs');
@@ -670,7 +678,10 @@ async function refresh(keepJobStatus) {
         (famData.count || 0) + ' families / ' + (data.count || 0) + ' tags | ' + (data.total || ''));
     }
   } catch (e) {
-    setStatus('Error: ' + e.message);
+    models = [];
+    families = [];
+    render();
+    setStatus('Error loading models: ' + e.message);
   }
 }
 
