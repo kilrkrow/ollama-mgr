@@ -740,7 +740,17 @@ func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, map[string]string{"message": "serve started"})
+	// Poll briefly so the UI can flip to UP without a console window
+	for i := 0; i < 20; i++ {
+		time.Sleep(250 * time.Millisecond)
+		if err := s.client.Ping(r.Context()); err == nil {
+			writeJSON(w, map[string]string{"message": "started in background"})
+			return
+		}
+	}
+	writeJSON(w, map[string]string{
+		"message": "started process but API not reachable yet; check Ollama install / port 11434",
+	})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

@@ -598,7 +598,7 @@ func cmdServe() *cobra.Command {
 				fmt.Println("Ollama is already running.")
 				return nil
 			}
-			fmt.Println("Starting ollama serve...")
+			fmt.Println("Starting ollama serve in background (no console)...")
 			if err := ollama.StartServe(); err != nil {
 				return err
 			}
@@ -610,7 +610,7 @@ func cmdServe() *cobra.Command {
 					return nil
 				}
 			}
-			return fmt.Errorf("started serve but daemon not reachable yet")
+			return fmt.Errorf("started process but API not reachable; check Ollama install / port 11434")
 		},
 	}
 }

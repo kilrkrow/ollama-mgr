@@ -20,7 +20,7 @@ Ollama does not really “manage” what you have downloaded. This fills that ga
 | **Notional upgrades** | e.g. `qwen2.5-coder:32b` → `qwen3-coder:30b` (same weight class + specialty, newer series) |
 | **Upgrade modes** | Skip · side-by-side · **staged swap** (DELETE PENDING → pull/verify → only then remove old) |
 | **Run model** | Opens a new console (`ollama run <tag>`). Needs exactly one selected installed model |
-| **Start server** | Starts the Ollama daemon if down (`ollama serve`). No model required |
+| **Start server** | Starts the Ollama daemon if down (`ollama serve`) **in the background with no console window**. No model required |
 | **CLI + GUI** | Shared core; two Windows executables |
 
 ### Feature chips (legend)

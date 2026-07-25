@@ -821,7 +821,7 @@ document.getElementById('btnServe').onclick = async function() {
     var j = await api('/api/serve', {method: 'POST'});
     var msg = j.message || '';
     if (msg === 'already up') msg = 'Ollama server is already running';
-    else if (msg === 'serve started') msg = 'Ollama server started';
+    else if (msg === 'started in background' || msg === 'serve started') msg = 'Ollama server started in background (no console)';
     setStatus(msg);
     await refresh(true);
   } catch (e) { alert(e.message); }

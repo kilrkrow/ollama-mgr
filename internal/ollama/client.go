@@ -293,14 +293,13 @@ func RunInteractive(model string) error {
 	return cmd.Run()
 }
 
-// StartServe starts `ollama serve` in the background (detached).
+// StartServe starts `ollama serve` in the background without a console window
+// (see serve_windows.go / serve_other.go). Does not wait for the process to exit.
 func StartServe() error {
-	cmd := exec.Command("ollama", "serve")
-	// detach on Windows: don't wait
-	if err := cmd.Start(); err != nil {
+	if err := startServeDetached(); err != nil {
 		return fmt.Errorf("start ollama serve: %w", err)
 	}
-	// give it a moment
+	// brief settle so a follow-up Ping often succeeds
 	time.Sleep(800 * time.Millisecond)
 	return nil
 }
