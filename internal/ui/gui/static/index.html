@@ -22,6 +22,7 @@
   <button id="btnRun" title="Open a console and chat (ollama run). Select one installed model first.">Run model</button>
   <button class="danger" id="btnDelete">Delete</button>
   <button id="btnServe" title="Start the Ollama daemon if it is not running (ollama serve).">Start server</button>
+  <button id="btnSettings" title="Windows integration settings">Settings</button>
 </header>
 <div id="status">Loading...</div>
 <div id="addBar">
@@ -126,6 +127,20 @@
   <div class="dlg-actions">
     <button id="btnCancelUpgrade">Cancel</button>
     <button class="primary" id="btnDoUpgrade">Go</button>
+  </div>
+</dialog>
+
+<dialog id="settingsDlg">
+  <div class="dlg-body">
+    <h2 style="margin:0 0 8px;font-size:16px;">Settings</h2>
+    <p class="muted">Windows utility defaults (KilrKrow Brand Book).</p>
+    <label class="toggle-row"><input type="checkbox" id="chkStartWindows"/> Start with Windows</label>
+    <label class="toggle-row"><input type="checkbox" id="chkStartMenu"/> Add to Start Menu</label>
+    <p class="muted" style="margin-top:10px">Tray icon is always available while the app runs. Close the window to keep the tray; Exit from the tray quits.</p>
+  </div>
+  <div class="dlg-actions">
+    <button id="btnSettingsClose">Close</button>
+    <button class="primary" id="btnSettingsSave">Save</button>
   </div>
 </dialog>
 <script src="/static/app.js"></script>

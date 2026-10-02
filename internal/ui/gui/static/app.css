@@ -252,3 +252,17 @@ input[type=text] {
   font-size: 14px;
 }
 #popularBody .rank { color: var(--muted); width: 40px; }
+
+
+label.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  cursor: pointer;
+  color: #e2e8f0;
+}
+label.toggle-row input {
+  width: 16px;
+  height: 16px;
+}

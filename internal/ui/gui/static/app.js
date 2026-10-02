@@ -999,4 +999,37 @@ document.addEventListener('keydown', function(e) {
   } catch (e) { /* ignore */ }
 })();
 
+
+document.getElementById('btnSettings').onclick = async function() {
+  try {
+    var s = await api('/api/settings');
+    document.getElementById('chkStartWindows').checked = !!s.start_with_windows;
+    document.getElementById('chkStartMenu').checked = !!s.start_menu;
+  } catch (e) {
+    document.getElementById('chkStartWindows').checked = false;
+    document.getElementById('chkStartMenu').checked = false;
+  }
+  document.getElementById('settingsDlg').showModal();
+};
+document.getElementById('btnSettingsClose').onclick = function() {
+  document.getElementById('settingsDlg').close();
+};
+document.getElementById('btnSettingsSave').onclick = async function() {
+  var body = {
+    start_with_windows: document.getElementById('chkStartWindows').checked,
+    start_menu: document.getElementById('chkStartMenu').checked
+  };
+  try {
+    var res = await api('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    document.getElementById('chkStartWindows').checked = !!res.start_with_windows;
+    document.getElementById('chkStartMenu').checked = !!res.start_menu;
+    document.getElementById('settingsDlg').close();
+    setStatus('Settings saved');
+  } catch (e) { alert(e.message); setStatus(e.message); }
+};
+
 refresh();

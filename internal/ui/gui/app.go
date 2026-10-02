@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,18 +26,24 @@ import (
 	"github.com/kilrkrow/ollama-mgr/internal/origin"
 	"github.com/kilrkrow/ollama-mgr/internal/registry"
 	"github.com/kilrkrow/ollama-mgr/internal/upgrade"
+	"github.com/kilrkrow/ollama-mgr/internal/winutil"
 )
 
 //go:embed static/*
 var staticFS embed.FS
 
-// Run starts a local API server and opens a WebView2 window (falls back to browser).
-func Run(cfg config.Config) {
+// Run starts a local API server, system tray, and WebView2 window.
+// startHidden (--tray) keeps the window closed until the user opens it from the tray.
+func Run(cfg config.Config, startHidden bool) {
 	addr, stop := startServer(cfg, "127.0.0.1:0")
 	defer stop()
 
 	url := "http://" + addr + "/"
-	// Prefer native WebView2 window; fall back to default browser.
+	runWithTray(cfg, url, startHidden)
+}
+
+// openWebView opens a WebView2 window (or browser fallback) and blocks until closed.
+func openWebView(url string) {
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
 		AutoFocus: true,
@@ -51,9 +56,8 @@ func Run(cfg config.Config) {
 	})
 	if w == nil {
 		log.Printf("WebView2 unavailable; opening browser at %s", url)
-		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-		// keep process alive serving HTTP
-		select {}
+		_ = winutil.OpenURL(url)
+		return
 	}
 	defer w.Destroy()
 	w.Navigate(url)
@@ -108,6 +112,7 @@ func startServer(cfg config.Config, listenAddr string) (bound string, stop func(
 	mux.HandleFunc("/api/run", srv.handleRun)
 	mux.HandleFunc("/api/serve", srv.handleServe)
 	mux.HandleFunc("/api/config", srv.handleConfig)
+	mux.HandleFunc("/api/settings", srv.handleSettings)
 
 	go func() {
 		if err := http.Serve(ln, mux); err != nil {
@@ -695,7 +700,7 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		p := modelparse.Parse(name, "")
 		u := p.LibraryURL()
 		urls = append(urls, u)
-		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", u).Start()
+		_ = winutil.OpenURL(u)
 	}
 	writeJSON(w, map[string]any{"urls": urls})
 }
@@ -713,19 +718,8 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Launch interactive chat in a *new* console window.
-	//
-	// Windows START treats the first *quoted* token as the window title.
-	// Wrong:  start "ollama run mistral:7b"   â†’ tries to execute that string as a program
-	//          (Go re-quotes a single /C string and breaks nested quotes)
-	// Right:  start "" cmd.exe /K ollama run mistral:7b
-	//          empty title "", then real executable cmd.exe
-	cmd := exec.Command(
-		"cmd.exe", "/C",
-		"start", "",
-		"cmd.exe", "/K",
-		"ollama", "run", body.Name,
-	)
-	if err := cmd.Start(); err != nil {
+	// Helper process is hidden (CREATE_NO_WINDOW); the interactive console is intentional.
+	if err := winutil.StartInteractiveConsole(body.Name); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -774,11 +768,62 @@ func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {
 
 // handleConfig exposes non-secret settings the UI needs (e.g. auto-start).
 func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	ui := config.LoadUISettings()
 	writeJSON(w, map[string]any{
-		"endpoint":           s.cfg.Endpoint,
-		"auto_start_server":  s.cfg.AutoStartServer,
-		"version":            config.Version,
+		"endpoint":            s.cfg.Endpoint,
+		"auto_start_server":   s.cfg.AutoStartServer,
+		"version":             config.Version,
+		"start_with_windows":  ui.StartWithWindows,
+		"start_menu":          winutil.IsStartMenuShortcutPresent(),
 	})
+}
+
+// handleSettings GET/POST Brand Book toggles (Start with Windows, Start Menu).
+func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		ui := config.LoadUISettings()
+		writeJSON(w, map[string]any{
+			"start_with_windows": ui.StartWithWindows,
+			"start_menu":         winutil.IsStartMenuShortcutPresent(),
+		})
+		return
+	case http.MethodPost:
+		var body struct {
+			StartWithWindows *bool `json:"start_with_windows"`
+			StartMenu        *bool `json:"start_menu"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeErr(w, fmt.Errorf("invalid JSON"))
+			return
+		}
+		ui := config.LoadUISettings()
+		if body.StartWithWindows != nil {
+			ui.StartWithWindows = *body.StartWithWindows
+			if err := winutil.ApplyStartWithWindows(ui.StartWithWindows); err != nil {
+				writeErr(w, err)
+				return
+			}
+			if err := config.SaveUISettings(ui); err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
+		if body.StartMenu != nil {
+			if err := winutil.ApplyStartMenuShortcut(*body.StartMenu); err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
+		writeJSON(w, map[string]any{
+			"ok":                 true,
+			"start_with_windows": ui.StartWithWindows,
+			"start_menu":         winutil.IsStartMenuShortcutPresent(),
+		})
+		return
+	default:
+		http.Error(w, "GET or POST required", http.StatusMethodNotAllowed)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
