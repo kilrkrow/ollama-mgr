@@ -62,7 +62,7 @@ func cmdUpgrade() *cobra.Command {
 			}
 			fmt.Println(res.Message)
 			if res.AlreadyHad && m == actions.ModeSwap {
-				fmt.Println("(target was already installed â€” pull was quick; delete only ran after verify)")
+				fmt.Println("(target was already installed - pull was quick; delete only ran after verify)")
 			}
 			return nil
 		},

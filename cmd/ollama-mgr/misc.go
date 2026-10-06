@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/kilrkrow/ollama-mgr/internal/config"
 	"github.com/kilrkrow/ollama-mgr/internal/modelparse"
 	"github.com/kilrkrow/ollama-mgr/internal/ollama"
+	"github.com/kilrkrow/ollama-mgr/internal/winutil"
 	"github.com/spf13/cobra"
 )
 
@@ -184,15 +183,6 @@ func printPullProgress(p ollama.PullProgress) {
 }
 
 func openBrowser(rawURL string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL)
-	case "darwin":
-		cmd = exec.Command("open", rawURL)
-	default:
-		cmd = exec.Command("xdg-open", rawURL)
-	}
 	fmt.Println(rawURL)
-	return cmd.Start()
+	return winutil.OpenURL(rawURL)
 }

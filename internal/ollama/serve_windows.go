@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// startServeDetached launches `ollama serve` with no visible console and no
+// startServeDetached launches `ollama serve` with a hidden console and no
 // attachment to the parent terminal. Logs go to %LOCALAPPDATA%\ollama-mgr\ollama-serve.log.
 func startServeDetached() error {
 	cmd := exec.Command("ollama", "serve")
@@ -32,7 +32,13 @@ func startServeDetached() error {
 		cmd.Stderr = nil
 	}
 
-	const flags = windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW | windows.DETACHED_PROCESS
+	// CREATE_NO_WINDOW gives ollama a hidden console that its own console
+	// children (gpu-discover, llama-server runners) inherit, so none of them
+	// opens a window. Do not add DETACHED_PROCESS: Windows ignores
+	// CREATE_NO_WINDOW when it is combined with DETACHED_PROCESS, and a
+	// console-less ollama makes every child allocate a new, visible console
+	// (a Windows Terminal window each when Terminal is the default host).
+	const flags = windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: uint32(flags),

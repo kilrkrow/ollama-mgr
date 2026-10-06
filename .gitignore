@@ -1,8 +1,24 @@
 dist/
+artifacts/
 *.exe
 *.test
 *.out
 .idea/
 .vscode/
 *.dll
+*.syso
+rsrc_windows_*.syso
 tmp_debug.go
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+*.secret
+*.local.json
+.DS_Store
+Thumbs.db
+# Vendored go-webview2 embeds Microsoft's redistributable WebView2Loader.dll
+!third_party/go-webview2/webviewloader/sdk/*/WebView2Loader.dll

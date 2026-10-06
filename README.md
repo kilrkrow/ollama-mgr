@@ -2,7 +2,7 @@
 
 Thin Windows manager for **local Ollama models**: list, check for updates (same-tag digests **and** notional generation upgrades), delete, open library pages, pull, and run.
 
-Ollama does not really “manage” what you have downloaded. This fills that gap.
+Ollama does not really "manage" what you have downloaded. This fills that gap.
 
 **Repo:** https://github.com/kilrkrow/ollama-mgr
 
@@ -11,17 +11,18 @@ Ollama does not really “manage” what you have downloaded. This fills that ga
 | Capability | Description |
 |------------|-------------|
 | **List** | Installed models with size, params, quant, **Released** (upstream library Updated), Downloaded (local), library URL |
-| **Family view** | Group by base model with **feature pills** and **size pills** (solid = on disk, outline = available → click to pull) |
-| **+ Family** | Search the library and fetch a line you don’t have yet (features + outline sizes; nothing downloads until you click a pill). Board persists under `%APPDATA%\ollama-mgr\` |
-| **Popular** | Browse top 10/25/50/100 by ollama.com library order (download rank). Features explain “why care”; Fetch / size pills pull explicitly |
-| **Flags** | Curated country-of-origin chips (lab HQ). **Not** from the Ollama API — see `internal/origin` |
-| **Selection** | Click row = select · Ctrl+click = toggle · Shift+click = range · Esc = clear (no always-on checkboxes) |
+| **Family view** | Group by base model with **feature pills** and **size pills** (solid = on disk, outline = available -> click to pull) |
+| **+ Family** | Search the library and fetch a line you do not have yet. Board persists under `%APPDATA%\ollama-mgr\` |
+| **Popular** | Browse top 10/25/50/100 by ollama.com library order (download rank) |
+| **Flags** | Curated country-of-origin chips (lab HQ). **Not** from the Ollama API - see `internal/origin` |
+| **Selection** | Click row = select; Ctrl+click = toggle; Shift+click = range; Esc = clear |
 | **Digest updates** | Compare local weight digests to `registry.ollama.ai` without pulling |
-| **Notional upgrades** | e.g. `qwen2.5-coder:32b` → `qwen3-coder:30b` (same weight class + specialty, newer series) |
-| **Upgrade modes** | Skip · side-by-side · **staged swap** (DELETE PENDING → pull/verify → only then remove old) |
+| **Notional upgrades** | e.g. `qwen2.5-coder:32b` -> `qwen3-coder:30b` (same weight class + specialty, newer series) |
+| **Upgrade modes** | Skip / side-by-side / **staged swap** (DELETE PENDING -> pull/verify -> only then remove old) |
 | **Run model** | Opens a new console (`ollama run <tag>`). Needs exactly one selected installed model |
-| **Start server** | Starts the Ollama daemon if down (`ollama serve`) **in the background with no console window**. No model required |
-| **Auto-start** | GUI load/refresh: if the API is down, starts Ollama in the background once (status notes *auto-started*). Set `OLLAMA_MGR_AUTO_START=0` to disable |
+| **Start server** | Starts the Ollama daemon if down (`ollama serve`) **in the background with no console window** |
+| **Auto-start** | GUI load/refresh: if the API is down, starts Ollama in the background once. Set `OLLAMA_MGR_AUTO_START=0` to disable |
+| **Tray + Windows** | System tray icon; **Start with Windows** and **Add to Start Menu** toggles (Settings + tray menu) |
 | **CLI + GUI** | Shared core; two Windows executables |
 
 ### Feature chips (legend)
@@ -36,11 +37,20 @@ Ollama does not really “manage” what you have downloaded. This fills that ga
 | Style | Meaning |
 |--------|---------|
 | Solid green | That size class is **downloaded** |
-| Dashed outline | On the library, **not** local — click to pull |
+| Dashed outline | On the library, **not** local - click to pull |
+
+## Install (release zip)
+
+1. Download the latest `ollama-mgr-win-x64-v*.zip` from [GitHub Releases](https://github.com/kilrkrow/ollama-mgr/releases).
+2. Verify SHA256 (printed in the release notes and by `Get-FileHash`).
+3. Extract and run `ollama-mgr-gui.exe` (GUI) or `ollama-mgr.exe` (CLI).
+4. Optional: open **Settings** in the GUI and enable **Add to Start Menu** / **Start with Windows**.
+
+Requires [Ollama](https://ollama.com) and the WebView2 Runtime (preinstalled on modern Windows 11).
 
 ## Build (Windows)
 
-Requirements: [Go](https://go.dev/) 1.22+, and [Ollama](https://ollama.com) for live use.
+Requirements: [Go](https://go.dev/) 1.22+, and Ollama for live use.
 
 ```powershell
 go mod tidy
@@ -49,8 +59,8 @@ go mod tidy
 
 Produces:
 
-- `dist/ollama-mgr.exe` — CLI
-- `dist/ollama-mgr-gui.exe` — WebView2 GUI (no console flash; needs WebView2 Runtime, preinstalled on modern Windows 11)
+- `dist/ollama-mgr.exe` - CLI
+- `dist/ollama-mgr-gui.exe` - WebView2 GUI (`-H=windowsgui`; tray + no console flash)
 
 ```powershell
 go install github.com/kilrkrow/ollama-mgr/cmd/ollama-mgr@latest
@@ -76,14 +86,14 @@ ollama-mgr run llama3.1:8b
 ollama-mgr status
 ollama-mgr serve
 ollama-mgr version
-ollama-mgr --endpoint http://gpu-box:11434 list
+ollama-mgr --endpoint http://127.0.0.1:11434 list
 ```
 
 Environment:
 
 | Variable | Meaning |
 |----------|---------|
-| `OLLAMA_HOST` | Ollama API host (default `http://localhost:11434`). If set to `0.0.0.0:…` (bind address), ollama-mgr rewrites it to `127.0.0.1` for client connections |
+| `OLLAMA_HOST` | Ollama API host (default `http://localhost:11434`). If set to a bind address like `0.0.0.0:...`, ollama-mgr rewrites it to `127.0.0.1` for client connections |
 | `OLLAMA_MGR_CACHE_TTL_HOURS` | Catalog cache TTL (default 24) |
 | `OLLAMA_MGR_CONFIG_DIR` | Override config dir (default `%APPDATA%\ollama-mgr`) |
 | `OLLAMA_MGR_AUTO_START` | `1`/`true` (default) = GUI auto-starts Ollama when down; `0`/`false` = do not |
@@ -92,10 +102,26 @@ Environment:
 
 Double-click `ollama-mgr-gui.exe`, or run it from a terminal.
 
-- **Family \| Tag** — grouped catalog vs one row per installed tag  
-- **+ Family** — fetch a library line (e.g. type `mistral`)  
-- Select a model (row or solid size pill) → **Run model**  
-- **Start server** only if the daemon is down  
+- **Family | Tag | Popular** - grouped catalog vs one row per installed tag vs library rank
+- **+ Family** - fetch a library line (e.g. type `mistral`)
+- Select a model (row or solid size pill) -> **Run model**
+- **Start server** only if the daemon is down (no console window)
+- **Settings** - Start with Windows, Add to Start Menu
+- **Tray** - Open / Start with Windows / Add to Start Menu / Exit. Closing the window keeps the tray; Exit quits. `--tray` starts tray-only (used by Start with Windows).
+
+Helper processes (`ollama serve`, URL open, the cmd used to spawn `ollama run`) use `CREATE_NO_WINDOW` so the GUI does not flash consoles. **Run model** still opens an intentional interactive console.
+
+## Releases
+
+KilrKrow pattern (same idea as Sideclip): build on Windows, zip, publish SHA256.
+
+```powershell
+.\scripts\publish-release.ps1 -Version 0.2.0
+# prints ZIP path + SHA256
+gh release create v0.2.0 .\artifacts\ollama-mgr-win-x64-v0.2.0.zip --title "ollama-mgr v0.2.0" --notes "SHA256: <hash from script>"
+```
+
+CI (`.github/workflows/ci.yml`) runs `go test` and builds both binaries on `windows-latest` for every push/PR to `main`. Tagged release automation can be added later; for now the publish script is the supported path.
 
 ## How notional upgrades work
 
@@ -114,17 +140,18 @@ Same-tag **digest** updates are reported separately when upstream weights change
 
 ```text
 cmd/ollama-mgr/       CLI
-cmd/ollama-mgr-gui/   GUI entrypoint
-internal/ollama/      Local Ollama HTTP API
+cmd/ollama-mgr-gui/   GUI entrypoint (WebView2 + tray)
+internal/ollama/      Local Ollama HTTP API (headless serve on Windows)
 internal/registry/    registry.ollama.ai manifests
 internal/catalog/     ollama.com search/tags (cached)
-internal/modelparse/  Name → family/version/specialty/size
+internal/modelparse/  Name -> family/version/specialty/size
 internal/family/      Group local + fetched families, pills
 internal/origin/      Curated country-of-origin map
 internal/upgrade/     Digest + notional engine
 internal/actions/     skip / side-by-side / swap / pull
 internal/jobs/        Async upgrade jobs for GUI
-internal/ui/gui/      WebView2 + embedded HTML UI
+internal/winutil/     Silent process start, Start with Windows, Start Menu
+internal/ui/gui/      WebView2 + embedded HTML UI + tray
 ```
 
 ## Screenshots
@@ -139,6 +166,12 @@ Captured from a live local Ollama install (re-run `.\scripts\capture-screenshots
 
 Flags in **Ctry** use [flagcdn](https://flagcdn.com) PNGs (WebView2 often botches emoji flags).
 
+## Privacy / public notes
+
+- No API keys or cloud credentials are required or stored by this tool.
+- Local prefs live under `%APPDATA%\ollama-mgr\` (fetched board, settings.json) and are not shipped in releases.
+- Endpoint used is your local Ollama (or whatever you pass via `--endpoint` / `OLLAMA_HOST`).
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
