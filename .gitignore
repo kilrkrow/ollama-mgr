@@ -20,3 +20,5 @@ secrets/
 *.local.json
 .DS_Store
 Thumbs.db
+# Vendored go-webview2 embeds Microsoft's redistributable WebView2Loader.dll
+!third_party/go-webview2/webviewloader/sdk/*/WebView2Loader.dll

@@ -16,7 +16,8 @@ import (
 var trayIconICO []byte
 
 // runWithTray hosts the Brand Book tray icon on the main thread and opens the
-// WebView2 window from a goroutine. Closing the window returns to tray-only;
+// WebView2 window from a goroutine pinned to its own COM STA thread. Closing
+// the window returns to tray-only;
 // Exit on the tray quits the process.
 func runWithTray(cfg config.Config, url string, startHidden bool) {
 	_ = cfg
@@ -91,6 +92,8 @@ func runWithTray(cfg config.Config, url string, startHidden bool) {
 		}()
 
 		go func() {
+			// WebView2 needs a dedicated STA thread with its own message loop.
+			uiThreadInit()
 			for range openCh {
 				mu.Lock()
 				if webviewOpen {

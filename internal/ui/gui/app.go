@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jchv/go-webview2"
 	"github.com/kilrkrow/ollama-mgr/internal/actions"
 	"github.com/kilrkrow/ollama-mgr/internal/catalog"
 	"github.com/kilrkrow/ollama-mgr/internal/config"
@@ -42,30 +41,10 @@ func Run(cfg config.Config, startHidden bool) {
 	runWithTray(cfg, url, startHidden)
 }
 
-// openWebView opens a WebView2 window (or browser fallback) and blocks until closed.
-func openWebView(url string) {
-	w := webview2.NewWithOptions(webview2.WebViewOptions{
-		Debug:     false,
-		AutoFocus: true,
-		WindowOptions: webview2.WindowOptions{
-			Title:  "ollama-mgr",
-			Width:  1100,
-			Height: 640,
-			Center: true,
-		},
-	})
-	if w == nil {
-		log.Printf("WebView2 unavailable; opening browser at %s", url)
-		_ = winutil.OpenURL(url)
-		return
-	}
-	defer w.Destroy()
-	w.Navigate(url)
-	w.Run()
-}
+// openWebView lives in webview_windows.go / webview_other.go.
 
 // RunHTTP serves the GUI over HTTP only (no WebView). Used for screenshots/dev.
-// addr example: "127.0.0.1:8765". Blocks until stop is impossible — call from main.
+// addr example: "127.0.0.1:8765". Blocks forever; call from main.
 func RunHTTP(cfg config.Config, addr string) {
 	listen, stop := startServer(cfg, addr)
 	defer stop()
@@ -179,14 +158,14 @@ func (s *server) handlePopular(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type item struct {
-		Rank            int               `json:"rank"`
-		Name            string            `json:"name"`
-		Pulls           string            `json:"pulls,omitempty"`
-		URL             string            `json:"url"`
-		Features        []string          `json:"features"`
-		Sizes           []string          `json:"sizes"`
-		InstalledSizes  map[string]bool   `json:"installed_sizes"`
-		Origin          origin.Info       `json:"origin"`
+		Rank           int             `json:"rank"`
+		Name           string          `json:"name"`
+		Pulls          string          `json:"pulls,omitempty"`
+		URL            string          `json:"url"`
+		Features       []string        `json:"features"`
+		Sizes          []string        `json:"sizes"`
+		InstalledSizes map[string]bool `json:"installed_sizes"`
+		Origin         origin.Info     `json:"origin"`
 	}
 	out := make([]item, 0, len(pageItems))
 	// Enrich only this page (lazy)
@@ -265,7 +244,7 @@ func (s *server) handleList(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	for _, m := range models {
 		p := modelparse.Parse(m.Name, m.ParameterSize)
-		released := "â€”"
+		released := "-"
 		if meta, ok := upstream[m.Name]; ok && !meta.UpdatedAt.IsZero() {
 			released = meta.UpdatedAt.UTC().Format("2006-01-02")
 		}
@@ -575,7 +554,7 @@ func (s *server) handleCheck(w http.ResponseWriter, r *http.Request) {
 			attention++
 		case upgrade.KindNotional:
 			if len(res.Candidates) > 0 {
-				st = "NOTIONAL â†’ " + res.Candidates[0].FullName
+				st = "NOTIONAL -> " + res.Candidates[0].FullName
 			} else {
 				st = "NOTIONAL"
 			}
@@ -666,7 +645,7 @@ func (s *server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"job_id":  id,
 		"job":     job,
-		"message": "upgrade started â€” watch job status (swap deletes only after verify)",
+		"message": "upgrade started - watch job status (swap deletes only after verify)",
 	})
 }
 
@@ -727,7 +706,7 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {
-	// GET /api/serve?auto=1 — used by GUI on load; respects AutoStartServer config
+	// GET /api/serve?auto=1 - used by GUI on load; respects AutoStartServer config
 	if r.Method == http.MethodGet {
 		auto := r.URL.Query().Get("auto") == "1"
 		if auto && !s.cfg.AutoStartServer {
@@ -770,11 +749,11 @@ func (s *server) handleServe(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	ui := config.LoadUISettings()
 	writeJSON(w, map[string]any{
-		"endpoint":            s.cfg.Endpoint,
-		"auto_start_server":   s.cfg.AutoStartServer,
-		"version":             config.Version,
-		"start_with_windows":  ui.StartWithWindows,
-		"start_menu":          winutil.IsStartMenuShortcutPresent(),
+		"endpoint":           s.cfg.Endpoint,
+		"auto_start_server":  s.cfg.AutoStartServer,
+		"version":            config.Version,
+		"start_with_windows": ui.StartWithWindows,
+		"start_menu":         winutil.IsStartMenuShortcutPresent(),
 	})
 }
 

@@ -22,3 +22,5 @@ require (
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 )
+
+replace github.com/jchv/go-webview2 => ./third_party/go-webview2

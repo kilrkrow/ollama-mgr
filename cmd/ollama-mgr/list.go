@@ -129,7 +129,7 @@ func cmdList() *cobra.Command {
 			}
 			for _, m := range models {
 				p := modelparse.Parse(m.Name, m.ParameterSize)
-				r := row{Model: m, LibraryURL: p.LibraryURL(), Released: "â€”"}
+				r := row{Model: m, LibraryURL: p.LibraryURL(), Released: "-"}
 				if meta, ok := upstream[m.Name]; ok && !meta.UpdatedAt.IsZero() {
 					r.Released = meta.UpdatedAt.UTC().Format("2006-01-02")
 				}
@@ -165,10 +165,10 @@ func cmdList() *cobra.Command {
 					}
 				case "released":
 					ai, aj := rows[i].Released, rows[j].Released
-					if ai == "â€”" {
+					if ai == "-" {
 						ai = "9999-99-99"
 					}
-					if aj == "â€”" {
+					if aj == "-" {
 						aj = "9999-99-99"
 					}
 					switch {
