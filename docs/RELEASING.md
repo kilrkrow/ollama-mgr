@@ -31,7 +31,7 @@ Release assets:
 
 Output goes to `release\` (self-ignored, never committed). The build is
 reproducible: `-trimpath`, `-buildvcs=false`, CGO off, pinned `go-winres`,
-fixed zip timestamps and entry order. The Go toolchain comes from the `go`
+zip written by `build/mkzip` (Go) with fixed timestamps and entry order. The Go toolchain comes from the `go`
 line in `go.mod` (CI uses it via `setup-go` `go-version-file`).
 
 ## Chocolatey

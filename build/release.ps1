@@ -11,9 +11,10 @@
     <OutDir>\ollama-mgr-win-x64-v<Version>.zip
     <OutDir>\ollama-mgr-win-x64-v<Version>.zip.sha256   ("<hex>  <zip name>")
 
-  The zip is written with ordinal-sorted entries, forward-slash names and a
-  fixed timestamp, so the same commit + same Go toolchain (pinned by the
-  go directive in go.mod) gives the same zip on any machine.
+  The zip is written by build/mkzip (Go) with byte-sorted entries,
+  forward-slash names and a fixed timestamp, so the same commit + same Go
+  toolchain (pinned by the go directive in go.mod) gives the same zip bytes
+  on any machine, from Windows PowerShell 5.1 or PowerShell 7.
 
   <OutDir> defaults to release\ and is self-ignored (a .gitignore with "*"
   is written into it), so nothing built here can be committed.
@@ -111,26 +112,12 @@ try {
 
 foreach ($f in $Extras) { Copy-Item -Force (Join-Path $Root $f) (Join-Path $Stage $f) }
 
-# Deterministic zip: ordinal-sorted entries, '/' separators, fixed timestamp.
-Add-Type -AssemblyName System.IO.Compression
+# Deterministic zip, written by the pinned Go toolchain (build/mkzip):
+# byte-sorted entries, '/' separators, fixed timestamp, same deflate output
+# on every machine.
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
-$fixed = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
-[string[]]$files = @(Get-ChildItem -LiteralPath $Stage -Recurse -File |
-    ForEach-Object { $_.FullName.Substring($Stage.Length + 1).Replace('\', '/') })
-[Array]::Sort($files, [StringComparer]::Ordinal)
-$fs = [IO.File]::Open($ZipPath, [IO.FileMode]::CreateNew)
-try {
-    $zip = New-Object IO.Compression.ZipArchive($fs, [IO.Compression.ZipArchiveMode]::Create)
-    try {
-        foreach ($rel in $files) {
-            $entry = $zip.CreateEntry($rel, [IO.Compression.CompressionLevel]::Optimal)
-            $entry.LastWriteTime = $fixed
-            $src = [IO.File]::OpenRead((Join-Path $Stage ($rel.Replace('/', '\'))))
-            try { $dst = $entry.Open(); try { $src.CopyTo($dst) } finally { $dst.Dispose() } }
-            finally { $src.Dispose() }
-        }
-    } finally { $zip.Dispose() }
-} finally { $fs.Dispose() }
+& go run ./build/mkzip -dir $Stage -out $ZipPath
+if ($LASTEXITCODE -ne 0) { throw "mkzip failed ($LASTEXITCODE)" }
 
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipPath).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText("$ZipPath.sha256", "$hash  $ZipName`n", [Text.Encoding]::ASCII)

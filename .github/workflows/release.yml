@@ -128,8 +128,10 @@ jobs:
           # Simulate the app's two toggles, then check uninstall removes them.
           $gui = Join-Path $tools 'ollama-mgr-gui.exe'
           $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          if (-not (Test-Path $runKey)) { New-Item -Path $runKey -Force | Out-Null }   # absent on fresh runners
           New-ItemProperty -Path $runKey -Name KilrKrowOllamaMgr -Value "`"$gui`" --tray" -PropertyType String -Force | Out-Null
           $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\ollama-mgr.lnk'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $lnk) | Out-Null
           $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk); $sc.TargetPath = $gui; $sc.Save()
 
           choco uninstall $env:APP_ID -y --no-progress
