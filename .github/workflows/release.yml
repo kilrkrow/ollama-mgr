@@ -1,0 +1,181 @@
+# Release spine for ollama-mgr (tag-triggered).
+#
+#   v1.2.3       -> published GitHub release + Chocolatey push (if allowed)
+#   v1.2.3-xyz   -> DRAFT prerelease, never pushed to Chocolatey
+#
+# Each step calls a repo script with explicit inputs (build/release.ps1,
+# build/choco-pack.ps1) so the job can later move into a shared reusable
+# workflow with APP_ID / ASSET_BASE / CANONICAL_REPO as inputs.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_ID: ollama-mgr
+  ASSET_BASE: ollama-mgr-win-x64
+  CANONICAL_REPO: kilrkrow/ollama-mgr
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go (version from go.mod)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve version
+        id: ver
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?)$') { throw "Tag '$tag' is not v<semver>." }
+          $version = $Matches[1]
+          $pre = if ($tag.Contains('-')) { 'true' } else { 'false' }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$pre" >> $env:GITHUB_OUTPUT
+          "zip=$env:ASSET_BASE-v$version.zip" >> $env:GITHUB_OUTPUT
+          Write-Host "tag=$tag version=$version prerelease=$pre"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build release zip
+        run: ./build/release.ps1 -Version '${{ steps.ver.outputs.version }}' -OutDir release
+
+      - name: Smoke test zip
+        run: |
+          $zip = "release/${{ steps.ver.outputs.zip }}"
+          $line = (Get-Content -Raw "$zip.sha256").Trim()
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($line -ne "$hash  ${{ steps.ver.outputs.zip }}") { throw "sha256 file mismatch: $line" }
+          $dir = Join-Path $env:RUNNER_TEMP 'zipcheck'
+          Expand-Archive $zip $dir -Force
+          $names = (Get-ChildItem $dir -Recurse -File | ForEach-Object Name | Sort-Object) -join ','
+          if ($names -ne 'LICENSE,ollama-mgr-gui.exe,ollama-mgr.exe,README.md') { throw "Unexpected zip contents: $names" }
+          $out = (& "$dir/ollama-mgr.exe" version | Out-String).Trim()
+          if ($out -ne 'ollama-mgr ${{ steps.ver.outputs.version }}') { throw "version output: '$out'" }
+          Write-Host "OK: $names; $out; sha256 $hash"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $zip = "release/${{ steps.ver.outputs.zip }}"
+          $hash = ((Get-Content -Raw "$zip.sha256").Trim() -split '\s+')[0]
+          $notes = @(
+            "ollama-mgr $tag for Windows x64.",
+            '',
+            "- ${{ steps.ver.outputs.zip }}: ollama-mgr.exe (CLI), ollama-mgr-gui.exe (GUI), LICENSE, README.md",
+            "- SHA256: $hash",
+            '',
+            'Verify: Get-FileHash -Algorithm SHA256 <zip>  (or compare with the .sha256 asset).',
+            'Requires Ollama and the Microsoft Edge WebView2 Runtime (GUI).'
+          ) -join "`n"
+          $notesFile = Join-Path $env:RUNNER_TEMP 'notes.md'
+          [IO.File]::WriteAllText($notesFile, $notes)
+          $ghArgs = @('release', 'create', $tag, $zip, "$zip.sha256", '--repo', $env:GITHUB_REPOSITORY,
+                    '--title', "ollama-mgr $tag", '--notes-file', $notesFile, '--verify-tag')
+          if ('${{ steps.ver.outputs.prerelease }}' -eq 'true') { $ghArgs += @('--draft', '--prerelease') }
+          & gh @ghArgs
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
+
+      - name: Chocolatey pack (release package)
+        id: pack
+        run: |
+          $nupkg = ./build/choco-pack.ps1 -Version '${{ steps.ver.outputs.version }}' -ZipPath 'release/${{ steps.ver.outputs.zip }}' -OutDir release/choco -Repo $env:CANONICAL_REPO
+          "nupkg=$nupkg" >> $env:GITHUB_OUTPUT
+
+      - name: Chocolatey test install (local zip, never pushed)
+        run: |
+          $zip = (Resolve-Path 'release/${{ steps.ver.outputs.zip }}').Path
+          $base = 'file:///' + (Split-Path -Parent $zip).Replace('\', '/')
+          $testDir = Join-Path $env:RUNNER_TEMP 'choco-test'
+          $nupkg = ./build/choco-pack.ps1 -Version '${{ steps.ver.outputs.version }}' -ZipPath $zip -BaseUrl $base -OutDir $testDir
+          $ver = [IO.Path]::GetFileNameWithoutExtension($nupkg).Substring($env:APP_ID.Length + 1)
+
+          choco install $env:APP_ID --version $ver --source $testDir --prerelease -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco install failed ($LASTEXITCODE)" }
+          $tools = Join-Path $env:ChocolateyInstall "lib/$env:APP_ID/tools"
+          foreach ($f in 'ollama-mgr.exe', 'ollama-mgr-gui.exe', 'ollama-mgr-gui.exe.gui', 'LICENSE.txt', 'VERIFICATION.txt') {
+            if (-not (Test-Path (Join-Path $tools $f))) { throw "missing $f" }
+          }
+          foreach ($s in 'ollama-mgr.exe', 'ollama-mgr-gui.exe') {
+            if (-not (Test-Path (Join-Path $env:ChocolateyInstall "bin/$s"))) { throw "missing shim $s" }
+          }
+          $out = (& (Join-Path $env:ChocolateyInstall 'bin/ollama-mgr.exe') version | Out-String).Trim()
+          if ($out -ne 'ollama-mgr ${{ steps.ver.outputs.version }}') { throw "shim version output: '$out'" }
+
+          # Simulate the app's two toggles, then check uninstall removes them.
+          $gui = Join-Path $tools 'ollama-mgr-gui.exe'
+          $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          New-ItemProperty -Path $runKey -Name KilrKrowOllamaMgr -Value "`"$gui`" --tray" -PropertyType String -Force | Out-Null
+          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\ollama-mgr.lnk'
+          $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk); $sc.TargetPath = $gui; $sc.Save()
+
+          choco uninstall $env:APP_ID -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco uninstall failed ($LASTEXITCODE)" }
+          $left = @()
+          if (Test-Path (Join-Path $env:ChocolateyInstall "lib/$env:APP_ID")) { $left += 'lib folder' }
+          foreach ($s in 'ollama-mgr.exe', 'ollama-mgr-gui.exe') { if (Test-Path (Join-Path $env:ChocolateyInstall "bin/$s")) { $left += "shim $s" } }
+          if ((Get-ItemProperty $runKey).PSObject.Properties.Name -contains 'KilrKrowOllamaMgr') { $left += 'Run value' }
+          if (Test-Path $lnk) { $left += 'Start Menu shortcut' }
+          if ($left) { throw "Leftovers after uninstall: $($left -join ', ')" }
+          Write-Host 'Chocolatey install/uninstall test OK (no leftovers).'
+
+      - name: Chocolatey install from GitHub release (published releases only)
+        if: steps.ver.outputs.prerelease == 'false'
+        run: |
+          $nupkg = '${{ steps.pack.outputs.nupkg }}'
+          $ver = [IO.Path]::GetFileNameWithoutExtension($nupkg).Substring($env:APP_ID.Length + 1)
+          choco install $env:APP_ID --version $ver --source (Split-Path -Parent $nupkg) -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco install (release URL) failed ($LASTEXITCODE)" }
+          choco uninstall $env:APP_ID -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco uninstall failed ($LASTEXITCODE)" }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.APP_ID }}-${{ steps.ver.outputs.version }}
+          path: |
+            release/${{ steps.ver.outputs.zip }}
+            release/${{ steps.ver.outputs.zip }}.sha256
+            release/choco/*.nupkg
+          if-no-files-found: error
+
+      - name: Chocolatey push (gated)
+        env:
+          CHOCO_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          $nupkg = '${{ steps.pack.outputs.nupkg }}'
+          $reasons = @()
+          if ('${{ steps.ver.outputs.prerelease }}' -ne 'false') { $reasons += "tag '$env:GITHUB_REF_NAME' is a prerelease" }
+          if ($env:GITHUB_REPOSITORY -ne $env:CANONICAL_REPO) { $reasons += "repository $env:GITHUB_REPOSITORY is not $env:CANONICAL_REPO" }
+          if ($env:REPO_PRIVATE -ne 'false') { $reasons += 'repository is not public' }
+          if (-not $env:CHOCO_KEY) { $reasons += 'secret CHOCOLATEY_API_KEY is not set' }
+          if ($reasons) {
+            Write-Host "Chocolatey push SKIPPED: $($reasons -join '; '). Package was packed and validated: $nupkg"
+            exit 0
+          }
+          choco push $nupkg --source https://push.chocolatey.org/ --api-key $env:CHOCO_KEY --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco push failed ($LASTEXITCODE)" }
