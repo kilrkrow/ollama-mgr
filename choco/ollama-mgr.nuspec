@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template: build/choco-pack.ps1 fills in the placeholder tokens at pack time. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>ollama-mgr</id>
+    <version>__VERSION__</version>
+    <packageSourceUrl>https://github.com/kilrkrow/ollama-mgr/tree/main/choco</packageSourceUrl>
+    <owners>kilrkrow</owners>
+    <title>ollama-mgr</title>
+    <authors>kilrkrow</authors>
+    <projectUrl>https://github.com/kilrkrow/ollama-mgr</projectUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/kilrkrow/ollama-mgr@main/assets/icon.png</iconUrl>
+    <copyright>Copyright (c) 2026 kilrkrow</copyright>
+    <licenseUrl>https://github.com/kilrkrow/ollama-mgr/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/kilrkrow/ollama-mgr</projectSourceUrl>
+    <docsUrl>https://github.com/kilrkrow/ollama-mgr#readme</docsUrl>
+    <bugTrackerUrl>https://github.com/kilrkrow/ollama-mgr/issues</bugTrackerUrl>
+    <tags>ollama llm models model-manager cli gui windows foss</tags>
+    <summary>Local Ollama model manager for Windows: list, check for updates, upgrade and clean up models (CLI and GUI).</summary>
+    <description><![CDATA[ollama-mgr is a small Windows tool to manage the models of a local [Ollama](https://ollama.com) install.
+
+It ships two programs:
+
+* `ollama-mgr` - command line (list, check, upgrade, rm, pull, status, ...)
+* `ollama-mgr-gui` - desktop window (WebView2) for the same tasks
+
+Both are put on the PATH by Chocolatey shims.
+
+Notes:
+
+* Ollama itself is not installed by this package.
+* The GUI needs the Microsoft Edge WebView2 Runtime (included in Windows 11 and current Windows 10).
+* Settings in %APPDATA%\ollama-mgr and caches in %LOCALAPPDATA%\ollama-mgr are user data and are kept on uninstall.
+]]></description>
+    <releaseNotes>__RELEASE_NOTES__</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

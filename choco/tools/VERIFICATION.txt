@@ -1,0 +1,19 @@
+VERIFICATION
+Verification is intended to assist the Chocolatey moderators and community
+in verifying that this package's contents are trustworthy.
+
+This package downloads the official release zip published by the author on
+GitHub; nothing else is embedded except this text and the license.
+
+Release:  https://github.com/kilrkrow/ollama-mgr/releases/tag/__TAG__
+Asset:    __URL64__
+SHA256:   __SHA256__
+
+To verify:
+  1. Download the asset above (or see the matching .sha256 asset on the release).
+  2. Run: Get-FileHash -Algorithm SHA256 <zip>
+  3. Compare with the SHA256 above and with checksum64 in chocolateyinstall.ps1.
+
+The zip is reproducible from source: check out tag __TAG__ and run
+  .\build\release.ps1 -Version __SEMVER__
+License: MIT, see LICENSE.txt (copied from the repository LICENSE file).
