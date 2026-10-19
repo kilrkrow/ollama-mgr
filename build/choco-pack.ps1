@@ -73,7 +73,7 @@ foreach ($f in Get-ChildItem -LiteralPath $Stage -Recurse -File -Include *.nuspe
 # choco pack ignores --out-dir on some hosts; pack in place, then move.
 Push-Location $Stage
 try {
-    & choco pack "$PackageId.nuspec" --limit-output
+    & choco pack "$PackageId.nuspec" --limit-output | ForEach-Object { Write-Host $_ }   # keep stdout = nupkg path only
     if ($LASTEXITCODE -ne 0) { throw "choco pack failed ($LASTEXITCODE)" }
 } finally { Pop-Location }
 $nupkgName = "$PackageId.$ChocoVersion.nupkg"

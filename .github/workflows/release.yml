@@ -102,7 +102,7 @@ jobs:
       - name: Chocolatey pack (release package)
         id: pack
         run: |
-          $nupkg = ./build/choco-pack.ps1 -Version '${{ steps.ver.outputs.version }}' -ZipPath 'release/${{ steps.ver.outputs.zip }}' -OutDir release/choco -Repo $env:CANONICAL_REPO
+          $nupkg = @(./build/choco-pack.ps1 -Version '${{ steps.ver.outputs.version }}' -ZipPath 'release/${{ steps.ver.outputs.zip }}' -OutDir release/choco -Repo $env:CANONICAL_REPO)[-1]
           "nupkg=$nupkg" >> $env:GITHUB_OUTPUT
 
       - name: Chocolatey test install (local zip, never pushed)
@@ -110,7 +110,7 @@ jobs:
           $zip = (Resolve-Path 'release/${{ steps.ver.outputs.zip }}').Path
           $base = 'file:///' + (Split-Path -Parent $zip).Replace('\', '/')
           $testDir = Join-Path $env:RUNNER_TEMP 'choco-test'
-          $nupkg = ./build/choco-pack.ps1 -Version '${{ steps.ver.outputs.version }}' -ZipPath $zip -BaseUrl $base -OutDir $testDir
+          $nupkg = @(./build/choco-pack.ps1 -Version '${{ steps.ver.outputs.version }}' -ZipPath $zip -BaseUrl $base -OutDir $testDir)[-1]
           $ver = [IO.Path]::GetFileNameWithoutExtension($nupkg).Substring($env:APP_ID.Length + 1)
 
           choco install $env:APP_ID --version $ver --source $testDir --prerelease -y --no-progress
